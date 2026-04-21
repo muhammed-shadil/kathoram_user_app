@@ -1,10 +1,13 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:kathoram_app/models/user.dart';
-import 'package:kathoram_app/theme/app_colors.dart';
+import 'package:kathoram_app/screens/bottom_nav_bar.dart';
 import 'package:kathoram_app/widgets/user_tile.dart';
 
 class ChatHomeScreen extends StatefulWidget {
-  ChatHomeScreen({super.key});
+  const ChatHomeScreen({super.key});
 
   @override
   State<ChatHomeScreen> createState() => _ChatHomeScreenState();
@@ -13,6 +16,7 @@ class ChatHomeScreen extends StatefulWidget {
 class _ChatHomeScreenState extends State<ChatHomeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
   final List<User> users = [
     User(
         name: "Isha Fathima",
@@ -60,121 +64,175 @@ class _ChatHomeScreenState extends State<ChatHomeScreen>
 
   @override
   void initState() {
-    super.initState();
     _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+    super.initState();
   }
 
   Widget buildTabContent() {
     return ListView.builder(
+      padding: EdgeInsets.zero,
       itemCount: users.length,
       itemBuilder: (context, index) {
-        return UserTile(
-          user: users[index],
-        );
+        return UserTile(user: users[index]);
       },
     );
   }
 
+  int selectedIndex = 0;
+
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
       child: Scaffold(
-        backgroundColor:AppColors.bgcolor,
-
-        /// 📱 BODY
+        extendBodyBehindAppBar: true,
+        backgroundColor: const Color(0xFFF2F2F2),
         body: Column(
           children: [
-            Stack(
-              children: [
-                Image.asset("assets/images/Rectangle2.png"),
-                //1
-                Positioned(
-                    top: 100,
-                    left: 20,
-                    child: Image.asset("assets/images/text.png", width: 150)),
-                //2
-                Positioned(
-                  top: 50,
-                  right: 25,
-                  child: Row(
-                    children: [
-                      Image.asset("assets/images/coin.png",
-                          width: 50, height: 90),
-                      //SizedBox(width: 5),
-                      Text("100",
-                          style:
-                              TextStyle(color: Colors.white, fontSize: 16)),
-                    ],
-                  ),
-                ),
-        
-                //3
-                Positioned(
-                    right: 30,
-                    top: 150,
-                    bottom: 10,
-                    child: ElevatedButton.icon(
-                      onPressed: () {},
-                      icon: Icon(Icons.add, color: AppColors.primary),
-                      label: Text('Add Coins',
-                          style: TextStyle(color: AppColors.primary)),
-                      style: ElevatedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(5)),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        textStyle: TextStyle(fontSize: 13),
+            /// BLUE HEADER
+            /// BLUE HEADER
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.23,
+              width: double.infinity,
+              child: Stack(
+                children: [
+                  /// BLUE BACKGROUND WITH CURVE
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xff1976D2),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(40),
+                        bottomRight: Radius.circular(40),
                       ),
-                    )),
-              ],
+                    ),
+                  ),
+
+                  /// APP NAME
+                  Positioned(
+                    top: 80,
+                    left: 20,
+                    child: Row(
+                      children: [
+                        Image.asset(
+                          "assets/images/kathoram.png",
+                          width: 40,
+                          height: 40,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "Kathoram",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  /// COINS
+                  Positioned(
+                    top: 60,
+                    right: 20,
+                    child: Row(
+                      children: [
+                        Image.asset("assets/images/coin.png", width: 26),
+                        const SizedBox(width: 2),
+                        const Text(
+                          "100",
+                          style: TextStyle(color: Colors.white, fontSize: 20),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  /// ADD COINS BUTTON
+                  Positioned(
+                    right: 20,
+                    bottom: 20,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BottomNavBar(initialIndex: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add, color: Colors.blue),
+                      label: const Text(
+                        "Add Coins",
+                        style: TextStyle(color: Colors.blue),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+
             Expanded(
               child: Container(
                 decoration: const BoxDecoration(
-                  color: AppColors.bgcolor,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(25)),
+                  color: Color(0xFFF2F2F2),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
                 ),
                 child: Column(
                   children: [
-                    const SizedBox(height: 10),
-        
-                    // ✅ TABBAR (SEPARATED FROM APPBAR)
-        
-                    Container(
-                      margin: EdgeInsets.symmetric(horizontal: 16),
-                      padding: EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE0E0E0), // grey background
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: TabBar(
-                        controller: _tabController,
-                        indicator: BoxDecoration(
-                          color: Colors.white, // selected tab
-                          borderRadius: BorderRadius.circular(30),
+                    const SizedBox(height: 12),
+
+                    /// PROFESSIONAL SEGMENTED TAB
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        height: 45,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE6E6E6),
+                          borderRadius: BorderRadius.circular(25),
                         ),
-                        indicatorSize: TabBarIndicatorSize.tab,
-                        labelColor: Colors.black, // selected text
-                        unselectedLabelColor: Colors.grey, // unselected text
-                        dividerColor: Colors.transparent,
-                        tabs: const [
-                          Tab(text: "All"),
-                          Tab(text: "New"),
-                          Tab(text: "Popular"),
-                        ],
+                        child: TabBar(
+                          padding: EdgeInsets.zero,
+                          controller: _tabController,
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          dividerColor: Colors.transparent,
+                          indicator: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          indicatorPadding: const EdgeInsets.all(4),
+                          labelColor: Colors.black,
+                          unselectedLabelColor: Colors.grey,
+                          labelStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          unselectedLabelStyle: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                          tabs: const [
+                            Tab(child: Center(child: Text("All"))),
+                            Tab(child: Center(child: Text("New"))),
+                            Tab(child: Center(child: Text("Popular"))),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 10),
-        
-                    // TAB VIEW
+                    SizedBox(
+                      height: 5,
+                    ),
+
+                    /// USER LIST
                     Expanded(
                       child: TabBarView(
                         controller: _tabController,
@@ -188,14 +246,12 @@ class _ChatHomeScreenState extends State<ChatHomeScreen>
                   ],
                 ),
               ),
-            ),
+            )
           ],
         ),
 
-        ///  BOTTOM NAVIGATION
+        /// BOTTOM NAVIGATION
       ),
     );
   }
 }
-
-

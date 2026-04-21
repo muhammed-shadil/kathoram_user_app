@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import 'package:flutter/material.dart';
 import 'package:kathoram_app/models/user.dart';
 import 'package:kathoram_app/widgets/user_tile.dart';
 
@@ -18,44 +18,48 @@ class CallHistoryScreen extends StatelessWidget {
       callDate: "10 Feb | 12:55 PM",
       callDuration: "01:00:98",
     ),
-  
- 
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor:Color (0xFFF2F2F2),
-
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── HEADER ──
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: Text(
-                  'Call History',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: Color(0xFFF2F2F2),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ── HEADER ──
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    'Call History',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // ── LIST ──
-            Expanded(
-              child: callHistory.isEmpty
-                  ? const Center(child: Text('No call history'))
-                  : ListView.builder(
-                      itemCount: callHistory.length,
-                      itemBuilder: (context, index) =>
-                          UserTile(user: callHistory[index]),
-                    ),
-            ),
-          ],
+              // ── LIST ──
+              Expanded(
+                child: callHistory.isEmpty
+                    ? const Center(child: Text('No call history'))
+                    : ListView.builder(
+                        itemCount: callHistory.length,
+                        itemBuilder: (context, index) =>
+                            UserTile(user: callHistory[index]),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:kathoram_app/screens/add_coin_done_screen.dart';
 import 'package:kathoram_app/screens/bottom_nav_bar.dart';
 import 'package:kathoram_app/screens/bottom_nav_screens/add_coin_screen.dart';
 import 'package:kathoram_app/screens/call_screen.dart';
+import 'package:kathoram_app/screens/forgot_screen.dart';
 import 'package:kathoram_app/screens/guest_signup_screen.dart';
 import 'package:kathoram_app/screens/bottom_nav_screens/chat_home_screen.dart';
 import 'package:kathoram_app/screens/onboarding_screen.dart';
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
         pack: CoinPack(coins: 100, price: 50),
       ),
       debugShowCheckedModeBanner: false,
-      initialRoute: '/sign in',
+      initialRoute: '/splash',
       routes: {
         '/splash': (context) => SplashScreen(),
         '/onboard': (context) => OnboardingScreen(),
@@ -37,7 +38,18 @@ class MyApp extends StatelessWidget {
         '/addcoinsdone': (context) => AddCoinsDoneScreen(),
         '/payment': (context) =>
             PaymentScreen(pack: CoinPack(coins: 100, price: 50)),
-        '/call': (context) => CallScreen(),
+        '/call': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>;
+
+          return CallScreen(
+            name: args['name'],
+            image: args['image'],
+            coins: args['coins'],
+          );
+          
+        },
+        '/forgotpassword': (context) => ForgotPasswordScreen(),
       },
     );
   }

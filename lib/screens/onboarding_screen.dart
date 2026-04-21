@@ -9,112 +9,76 @@ class OnboardingScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          /// BACKGROUND (WHITE)
+          /// WHITE BACKGROUND
           Container(color: Colors.white),
 
+          /// TOP CIRCLES
           Positioned(
-            top: 0,
+            top: 50,
             left: 0,
             right: 0,
             child: Center(
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  Image.asset("assets/images/Ellipse1.png"),
-                  Image.asset("assets/images/Ellipse2.png",
-                      height: 400, width: 400),
-                  Image.asset("assets/images/Ellipse3.png",
-                      width: 450, height: 450),
+                  Image.asset("assets/images/Ellipse1.png", width: 320),
+                  Image.asset("assets/images/Ellipse2.png", width: 360),
+                  Image.asset("assets/images/Ellipse3.png", width: 420),
                 ],
               ),
             ),
           ),
 
-          /// CIRCLES (TOP BACKGROUND)
-          // Positioned(
-          //   top: 0,
-          //   left: 0,
-          //   right: 0,
-          //   child: Image.asset(
-          //     "assets/images/Ellipse1.png",
-          //     fit: BoxFit.cover,
-          //   ),
-          // ),
-
-          // Positioned(
-          //   top: 20,
-          //   left: 0,
-          //   right: 0,
-          //   child: Image.asset(
-          //     "assets/images/Ellipse2.png",
-          //     fit: BoxFit.cover,
-          //   ),
-          // ),
-
-          // Positioned(
-          //   top: 40,
-          //   left: 0,
-          //   right: 0,
-          //   child: Image.asset(
-          //     "assets/images/Ellipse3.png",
-          //     fit: BoxFit.cover,
-          //   ),
-          // ),
-
-          /// GIRL IMAGE
+          /// GIRL IMAGE (PERFECT POSITION)
           Positioned(
-            top: 100,
+            top: 150,
             left: 0,
             right: 0,
             child: Center(
-              child: Text(
+              child: Image.asset(
                 "assets/images/girl.png",
-                //height: 320,
+                height: 500,
+                width: 300,
+                fit: BoxFit.contain,
               ),
             ),
           ),
 
-          /// HELLO
-          Positioned(
-            top: 120,
-            left: 30,
-            child: Image.asset(
-              "assets/images/hello.png",
-              height: 70,
-              width: 80,
-            ),
-          ),
-
-          /// HEY
+          /// HELLO STICKER
           Positioned(
             top: 140,
-            right: 30,
+            left: 50,
             child: Image.asset(
-              "assets/images/hey.png",
-              height: 70,
-              width: 80,
+              "assets/images/hello.png",
+              height: 60,
             ),
           ),
 
-          /// BLUE SECTION IMAGE (YOUR ASSET)
+          /// HEY STICKER
           Positioned(
-            bottom: -90,
+            top: 140,
+            right: 40,
+            child: Image.asset(
+              "assets/images/hey.png",
+              height: 60,
+            ),
+          ),
+
+          /// BLUE BOTTOM SECTION
+          Positioned(
+            bottom: 0,
             left: 0,
             right: 0,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                /// BLUE BACKGROUND IMAGE
                 Image.asset(
-                  "assets/images/Rectangle1.png", // your blue section image
+                  "assets/images/Rectangle1.png",
                   width: double.infinity,
                   fit: BoxFit.cover,
                 ),
-
-                /// CONTENT OVER BLUE IMAGE
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  padding: const EdgeInsets.fromLTRB(25, 10, 25, 35),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -127,28 +91,22 @@ class OnboardingScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       const SizedBox(height: 10),
-
                       const Text(
-                        "Engage in real conversations without\n distractions. "
-                        "Share thoughts, stories,\n and moments through genuine voice interactions.",
+                        "Engage in real conversations without distractions. "
+                        "Share thoughts, stories, and moments through genuine voice interactions.",
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      /// BUTTON
                       CustomButton(
                         text: "Get Started",
-                        isReversed: true
-                        ,
+                        isReversed: true,
                         onPressed: () {
-                          Navigator.pushReplacementNamed(context, '/sign up');
+                          Navigator.pushReplacementNamed(context, '/sign in');
                         },
                       ),
                     ],

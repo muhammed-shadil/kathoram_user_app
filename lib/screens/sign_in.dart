@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:kathoram_app/widgets/custom_button.dart';
 import 'package:kathoram_app/widgets/custom_outline_button.dart';
 import 'package:kathoram_app/widgets/cutom_textfield.dart';
@@ -18,11 +19,15 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            /// Top Image Section (your rectangle + ripple)
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        body: Column(
+          children: [           
             Stack(
               children: [
                 Image.asset(
@@ -53,7 +58,6 @@ class _SignInScreenState extends State<SignInScreen> {
                       ),
                     )),
 
-                
                 Positioned.fill(
                   child: Align(
                     alignment: Alignment.center,
@@ -71,7 +75,7 @@ class _SignInScreenState extends State<SignInScreen> {
             /// Form Section
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
@@ -80,7 +84,8 @@ class _SignInScreenState extends State<SignInScreen> {
                         "Login",
                         style: TextStyle(
                           color: Colors.blue,
-                          fontSize: 16,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
 
@@ -112,7 +117,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                       CustomTextField(
                         labelText: "Phone Number",
-                        hint: "+91 0000000000",
+                        hint: "+91 ",
                         controller: emailController,
                         keyboardType: TextInputType.emailAddress,
                       ),
@@ -127,7 +132,9 @@ class _SignInScreenState extends State<SignInScreen> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: InkWell(
-                          onTap: () {},
+                          onTap: () {
+                            Navigator.pushNamed(context, '/forgotpassword');
+                          },
                           child: const Text(
                             "Forgot password?",
                             style: TextStyle(
@@ -170,7 +177,9 @@ class _SignInScreenState extends State<SignInScreen> {
                         children: [
                           const Text("Don't have an account? "),
                           InkWell(
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.pushNamed(context, '/sign up');
+                            },
                             child: const Text(
                               "Create Account",
                               style: TextStyle(
@@ -184,9 +193,16 @@ class _SignInScreenState extends State<SignInScreen> {
 
                       const SizedBox(height: 20),
 
-                     
-                     CustomButton(text: 'Sign In', onPressed: () {Navigator.pushNamed(context, '/bottomnav');},
-                      isReversed: false),
+                      CustomButton(
+                          text: 'Sign In',
+                          onPressed: () {
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              '/bottomnav',
+                              (route) => false,
+                            );
+                          },
+                          isReversed: false),
 
                       const SizedBox(height: 20),
                     ],
