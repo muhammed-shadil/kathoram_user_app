@@ -1,10 +1,15 @@
+import 'dart:developer';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../local_storage/shared_pref.dart';
 import '../../../routes/route_path.dart';
 import '../../../routes/custom_navigator.dart';
+import '../../../services/zego_call_service.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/enum.dart';
 import '../model/login_response_model.dart';
@@ -23,8 +28,18 @@ class AuthController extends GetxController {
   final signupPasswordController = TextEditingController();
   final signupConfirmPasswordController = TextEditingController();
 
+  // ─── Forgot Password Fields ───
+  final forgotMobileController = TextEditingController();
+  final otpControllers = List.generate(4, (_) => TextEditingController());
+  final newPasswordController = TextEditingController();
+  final confirmNewPasswordController = TextEditingController();
+
+  /// Temporary token received after OTP verification (used for password update)
+  var _forgotPasswordToken = '';
+
   var isTermsAgreed = false.obs;
   var isLoading = false.obs;
+  var isGoogleLoading = false.obs;
   var apiCallStatus = ApiCallStatus.holding.obs;
 
   // ─── User Profile Data ───
@@ -152,6 +167,10 @@ class AuthController extends GetxController {
       if (response.success && response.data != null) {
         userProfile.value =
             UserProfileData.fromJson(response.data as Map<String, dynamic>);
+
+        // Initialize Zego call invitation service after profile is available
+        _initZegoAfterLogin();
+
         return true;
       } else {
         return false;
@@ -159,6 +178,18 @@ class AuthController extends GetxController {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Initialize Zego signaling with the user's backend ID.
+  /// Called after userProfile is successfully loaded.
+  void _initZegoAfterLogin() {
+    final profile = userProfile.value;
+    if (profile == null) return;
+    log('[AuthController] Initializing Zego for user: ${profile.id} (${profile.name})');
+    ZegoCallService.instance.onUserLogin(
+      userID: profile.id,
+      userName: profile.name,
+    );
   }
 
   // ─── Logout ───
@@ -200,8 +231,191 @@ class AuthController extends GetxController {
     await _clearSessionAndNavigate();
   }
 
+  // ─── Google Sign-In ───
+  Future<void> googleSignIn() async {
+    try {
+      isGoogleLoading.value = true;
+
+      final googleSignIn = GoogleSignIn.instance;
+      await googleSignIn.initialize();
+
+      // Sign out first to always show the account picker
+      await googleSignIn.signOut();
+      final GoogleSignInAccount account = await googleSignIn.authenticate();
+
+      final String? googleIdToken = account.authentication.idToken;
+
+      if (googleIdToken == null) {
+        Fluttertoast.showToast(msg: "Failed to get Google token");
+        isGoogleLoading.value = false;
+        return;
+      }
+
+      // Sign in to Firebase with the Google credential
+      final credential = GoogleAuthProvider.credential(idToken: googleIdToken);
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // Get the Firebase ID token (this is what the backend expects)
+      final firebaseIdToken = await userCredential.user?.getIdToken();
+
+      if (firebaseIdToken == null) {
+        Fluttertoast.showToast(msg: "Failed to get Firebase token");
+        isGoogleLoading.value = false;
+        return;
+      }
+
+      // Send Firebase ID token to backend
+      final payload = {"token": firebaseIdToken};
+      final response = await AuthRepository.googleAuth(payload);
+
+      if (response.success && response.data != null) {
+        final loginData =
+            LoginResponseData.fromJson(response.data as Map<String, dynamic>);
+
+        await MySharedPref.setAuthToken(loginData.accessToken);
+        await MySharedPref.setLoggedInStatus(true);
+
+        Fluttertoast.showToast(msg: response.message);
+        CustomNavigator.pushCompleteReplacement(RoutePath.bottomNav);
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: "Google sign-in failed: ${e.toString()}");
+    } finally {
+      isGoogleLoading.value = false;
+    }
+  }
+
+  // ─── Send OTP (Forgot Password) ───
+  Future<void> sendOtp() async {
+    if (forgotMobileController.text.trim().isEmpty) {
+      Fluttertoast.showToast(msg: "Please enter your mobile number");
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+
+      final payload = {
+        "mobileNumber": forgotMobileController.text.trim(),
+      };
+
+      final response = await AuthRepository.sendOtp(payload);
+
+      if (response.success) {
+        Fluttertoast.showToast(msg: response.message);
+        Get.toNamed(RoutePath.otp);
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // ─── Verify OTP ───
+  Future<void> verifyOtp() async {
+    final otp = otpControllers.map((c) => c.text.trim()).join();
+    if (otp.length != 4) {
+      Fluttertoast.showToast(msg: "Please enter the complete OTP");
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+
+      final payload = {
+        "mobileNumber": forgotMobileController.text.trim(),
+        "otp": otp,
+      };
+
+      final response = await AuthRepository.verifyOtp(payload);
+
+      if (response.success && response.responseCode == 200 && response.data != null) {
+        // Store the temporary access token for password update
+        _forgotPasswordToken = response.data['accessToken'] ?? '';
+        Fluttertoast.showToast(msg: response.message);
+        Get.toNamed(RoutePath.changePassword);
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // ─── Update Password ───
+  Future<void> updatePassword() async {
+    if (newPasswordController.text.trim().isEmpty ||
+        confirmNewPasswordController.text.trim().isEmpty) {
+      Fluttertoast.showToast(msg: "Please fill all fields");
+      return;
+    }
+
+    if (newPasswordController.text.trim() !=
+        confirmNewPasswordController.text.trim()) {
+      Fluttertoast.showToast(msg: "Passwords do not match");
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+
+      final payload = {
+        "newPassword": newPasswordController.text.trim(),
+      };
+
+      final response =
+          await AuthRepository.passwordUpdate(payload, _forgotPasswordToken);
+
+      if (response.success) {
+        Fluttertoast.showToast(msg: response.message);
+        // Clear forgot password fields
+        clearForgotPasswordFields();
+        // Navigate back to sign in
+        Get.offAllNamed(RoutePath.signIn);
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // ─── Resend OTP ───
+  Future<void> resendOtp() async {
+    // Clear OTP fields
+    for (var c in otpControllers) {
+      c.clear();
+    }
+    try {
+      isLoading.value = true;
+
+      final payload = {
+        "mobileNumber": forgotMobileController.text.trim(),
+      };
+
+      final response = await AuthRepository.sendOtp(payload);
+      Fluttertoast.showToast(msg: response.message);
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   // ─── Clear session and navigate to login ───
   Future<void> _clearSessionAndNavigate() async {
+    // Disconnect from Zego signaling before clearing session
+    await ZegoCallService.instance.onUserLogout();
     await MySharedPref.clear();
     Get.offAllNamed(RoutePath.signIn);
   }
@@ -324,6 +538,17 @@ class AuthController extends GetxController {
     signupPasswordController.clear();
     signupConfirmPasswordController.clear();
     isTermsAgreed.value = false;
+  }
+
+  // ─── Clear forgot password fields ───
+  void clearForgotPasswordFields() {
+    forgotMobileController.clear();
+    for (var c in otpControllers) {
+      c.clear();
+    }
+    newPasswordController.clear();
+    confirmNewPasswordController.clear();
+    _forgotPasswordToken = '';
   }
 
   @override

@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "882594698231",
+    "project_id": "kathoram-65e13",
+    "storage_bucket": "kathoram-65e13.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:882594698231:android:a51521be2738949fc054f2",
+        "android_client_info": {
+          "package_name": "com.kathoram.agent_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "882594698231-jtlqlni6sb613v042lutiga4q3bkdhv9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBg-MmxAlKZ1JAFXTS3hrGZ5bS_-kka644"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "882594698231-jtlqlni6sb613v042lutiga4q3bkdhv9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:882594698231:android:9fe9da107afe6e80c054f2",
+        "android_client_info": {
+          "package_name": "com.kathoram.user_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "882594698231-jd5fsvcqi4h2hld7cbf7l94b5hsd321u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kathoram.user_app",
+            "certificate_hash": "1890c1ba13f48274885ffb5bd56c72a1e305edaf"
+          }
+        },
+        {
+          "client_id": "882594698231-jtlqlni6sb613v042lutiga4q3bkdhv9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBg-MmxAlKZ1JAFXTS3hrGZ5bS_-kka644"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "882594698231-jtlqlni6sb613v042lutiga4q3bkdhv9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

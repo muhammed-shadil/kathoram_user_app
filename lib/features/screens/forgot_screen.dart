@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import '../../routes/route_path.dart';
+
+import '../authentication/controller/auth_controller.dart';
 
 class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({super.key});
+  ForgotPasswordScreen({super.key});
+
+  final AuthController authController = Get.find<AuthController>();
 
   @override
   Widget build(BuildContext context) {
@@ -19,29 +23,28 @@ class ForgotPasswordScreen extends StatelessWidget {
                 width: double.infinity,
                 fit: BoxFit.cover,
               ),
-
-              //TOP left WAVES
               Positioned(
-                  top: -20,
-                  left: -20,
-                  child: Transform.rotate(
-                    angle: -1.8,
-                    child: Image.asset(
-                      'assets/images/ripples.png',
-                      width: 100,
-                    ),
-                  )),
+                top: -20,
+                left: -20,
+                child: Transform.rotate(
+                  angle: -1.8,
+                  child: Image.asset(
+                    'assets/images/ripples.png',
+                    width: 100,
+                  ),
+                ),
+              ),
               Positioned(
-                  bottom: -10,
-                  right: -10,
-                  child: Transform.rotate(
-                    angle: 1.8,
-                    child: Image.asset(
-                      'assets/images/ripples.png',
-                      width: 100,
-                    ),
-                  )),
-
+                bottom: -10,
+                right: -10,
+                child: Transform.rotate(
+                  angle: 1.8,
+                  child: Image.asset(
+                    'assets/images/ripples.png',
+                    width: 100,
+                  ),
+                ),
+              ),
               Positioned.fill(
                 child: Align(
                   alignment: Alignment.center,
@@ -52,24 +55,50 @@ class ForgotPasswordScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              )
+              ),
+              Positioned(
+                top: 40,
+                left: 10,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                  onPressed: () => Get.back(),
+                ),
+              ),
             ],
           ),
 
           const SizedBox(height: 30),
-          const Text("Forgot Password",
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue)),
+          const Text(
+            "Forgot Password",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              "Enter your mobile number to receive an OTP",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
 
           const SizedBox(height: 20),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 25),
             child: TextField(
+              controller: authController.forgotMobileController,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
               decoration: InputDecoration(
-                hintText: "Enter E-Mail Here",
+                hintText: "Enter Mobile Number",
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -79,6 +108,10 @@ class ForgotPasswordScreen extends StatelessWidget {
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(25),
                   borderSide: BorderSide(color: Colors.blue.shade200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: const BorderSide(color: Colors.blue),
                 ),
               ),
             ),
@@ -91,22 +124,27 @@ class ForgotPasswordScreen extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               height: 45,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xff1976D2),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25)),
-                ),
-                onPressed: () {
-                  Get.toNamed(RoutePath.otp);
-                },
-                child: const Text(
-                  "Get OTP",
-                  style: TextStyle(color: Colors.white),
-                ),
+              child: Obx(
+                () => authController.isLoading.value
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xff1976D2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        onPressed: () {
+                          authController.sendOtp();
+                        },
+                        child: const Text(
+                          "Get OTP",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );

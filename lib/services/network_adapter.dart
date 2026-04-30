@@ -42,9 +42,9 @@ class BaseClient {
   }) async {
     var option = BaseOptions(
       headers: {'Accept': 'application/json', "client": "OMS"},
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5),
-      sendTimeout: const Duration(seconds: 5),
+      connectTimeout: const Duration(seconds: 90),
+      receiveTimeout: const Duration(seconds: 90),
+      sendTimeout: const Duration(seconds: 90),
     );
     dioInstance.options = option;
     if (isAddBaseUrl) {

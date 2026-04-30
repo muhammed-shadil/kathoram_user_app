@@ -1,14 +1,19 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../../services/api_constants.dart';
+import '../../../services/socket_service.dart';
 import '../../../utils/enum.dart';
 import '../../authentication/controller/auth_controller.dart';
 import '../../authentication/model/user_profile_model.dart';
 import '../model/plan_model.dart';
 import '../model/payment_model.dart';
+import '../model/staff_model.dart';
+import '../model/call_history_model.dart';
 import '../repository/home_repository.dart';
 
 class HomeController extends GetxController {
@@ -20,11 +25,35 @@ class HomeController extends GetxController {
   var totalPages = 1.obs;
   var hasMorePages = true.obs;
 
+  // ─── Staff List ───
+  var staffList = <StaffModel>[].obs;
+  var isStaffLoading = false.obs;
+  var staffApiStatus = ApiCallStatus.holding.obs;
+  var staffCurrentPage = 1.obs;
+  var staffTotalPages = 1.obs;
+  var staffHasMorePages = true.obs;
+
+  // ─── Call History ───
+  var callHistoryList = <CallHistoryModel>[].obs;
+  var isCallHistoryLoading = false.obs;
+  var callHistoryApiStatus = ApiCallStatus.holding.obs;
+  var callHistoryCurrentPage = 1.obs;
+  var callHistoryTotalPages = 1.obs;
+  var callHistoryHasMorePages = true.obs;
+
   // ─── Payment ───
   var isPaymentLoading = false.obs;
   late Razorpay _razorpay;
   String? _currentPlanId;
   VoidCallback? _onPaymentSuccess;
+
+  // ─── Active Call State ───
+  var isCallLoading = false.obs;
+  var activeCallId = RxnString(); // backend call _id from initiate-call
+  var isInCall = false.obs; // whether user is currently in a Zego call
+
+  // ─── Socket Service ───
+  late SocketService _socketService;
 
   // ─── User Profile (shared from AuthController) ───
   UserProfileData? get userProfile {
@@ -49,9 +78,17 @@ class HomeController extends GetxController {
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
+    // Get or create socket service (permanent so it survives controller re-creation)
+    _socketService = Get.put(SocketService(), permanent: true);
+
     // Ensure user profile data is loaded
     _refreshUserProfile();
     fetchPlans();
+    fetchStaffList();
+    fetchCallHistory();
+
+    // Connect socket for real-time events (stays alive for entire session)
+    connectSocket();
   }
 
   /// Call isLogin API to ensure user profile data is available
@@ -65,7 +102,247 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _razorpay.clear();
+    disconnectSocket();
     super.onClose();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SOCKET.IO — connect, listen, disconnect
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Connect socket and register event listeners
+  void connectSocket() {
+    _socketService.connect();
+    // Remove old listeners before adding new ones to prevent duplicates
+    _socketService.off(SocketEvents.updateCallStatus);
+    _socketService.off(SocketEvents.endCall);
+    _listenSocketEvents();
+  }
+
+  /// Disconnect socket and remove event listeners
+  void disconnectSocket() {
+    _socketService.off(SocketEvents.updateCallStatus);
+    _socketService.off(SocketEvents.endCall);
+    _socketService.disconnect();
+  }
+
+  /// Register socket event listeners
+  void _listenSocketEvents() {
+    // ── UPDATE_CALL_STATUS: { staffId, status }
+    _socketService.on(SocketEvents.updateCallStatus, (data) {
+      log('[Socket] UPDATE_CALL_STATUS: $data');
+      if (data is Map<String, dynamic>) {
+        final staffId = data['staffId']?.toString() ?? '';
+        final newStatus = data['status']?.toString() ?? '';
+
+        if (staffId.isEmpty) return;
+
+        // Find the staff in our list and update their status in-place
+        final index = staffList.indexWhere((s) => s.id == staffId);
+        log('[Socket] Looking for staffId: "$staffId" in list of ${staffList.length} staff. Found at index: $index');
+        if (index != -1) {
+          final old = staffList[index];
+          log('[Socket] Updating "${old.name}" status: "${old.status}" → "$newStatus"');
+          staffList[index] = StaffModel(
+            id: old.id,
+            active: old.active,
+            tagId: old.tagId,
+            userType: old.userType,
+            name: old.name,
+            age: old.age,
+            coinsPerSec: old.coinsPerSec,
+            language: old.language,
+            profileImage: old.profileImage,
+            status: newStatus,
+            updatedAt: old.updatedAt,
+            createdAt: old.createdAt,
+          );
+          staffList.refresh();
+        }
+      }
+    });
+
+    // ── END_CALL: backend says stop (coins exhausted / timeout)
+    _socketService.on(SocketEvents.endCall, (data) {
+      log('[Socket] END_CALL: $data');
+      _handleForceEndCall();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CALL FLOW — initiate → zego → end
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Step 1: Call the initiate-call API. On success, returns the call _id and
+  /// sets [isInCall] so ZegoCallService can begin.
+  /// [roomId] is the Zego room ID that the staff app must join to connect.
+  Future<bool> initiateCall({
+    required String receiverId,
+    required String roomId,
+  }) async {
+    try {
+      isCallLoading.value = true;
+
+      final response = await HomeRepository.initiateCall(
+        receiverId: receiverId,
+        roomId: roomId,
+      );
+
+      if (response.success && response.responseCode == 200 && response.data != null) {
+        final callData = response.data as Map<String, dynamic>;
+        activeCallId.value = callData['_id']?.toString();
+        isInCall.value = true;
+        log('[Call] Initiated — callId: ${activeCallId.value}');
+        return true;
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+        return false;
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+      return false;
+    } finally {
+      isCallLoading.value = false;
+    }
+  }
+
+  /// Step 2: Called when user manually hangs up or Zego call ends normally.
+  Future<void> endCall() async {
+    final callId = activeCallId.value;
+    if (callId == null || callId.isEmpty) return;
+
+    try {
+      log('[Call] Ending — callId: $callId');
+      await HomeRepository.endCall(callId: callId, endedBy: "caller");
+    } catch (e) {
+      log('[Call] End-call API error: $e');
+    } finally {
+      _resetCallState();
+      // Refresh user profile to update coins
+      _refreshUserProfile();
+      // Refresh call history
+      fetchCallHistory();
+    }
+  }
+
+  /// Called by the END_CALL socket event — force-end the active Zego call.
+  void _handleForceEndCall() {
+    if (!isInCall.value) return;
+
+    log('[Call] Force-ending call from backend');
+    Fluttertoast.showToast(msg: "Call ended — coins exhausted");
+
+    // Reset call state
+    final callId = activeCallId.value;
+    _resetCallState();
+
+    // Fire end-call API just in case backend needs acknowledgement
+    if (callId != null && callId.isNotEmpty) {
+      HomeRepository.endCall(callId: callId, endedBy: "caller").ignore();
+    }
+
+    // Refresh user profile & call history
+    _refreshUserProfile();
+    fetchCallHistory();
+  }
+
+  void _resetCallState() {
+    activeCallId.value = null;
+    isInCall.value = false;
+  }
+
+  // ─── Fetch Staff List (with pagination) ───
+  Future<void> fetchStaffList({bool loadMore = false}) async {
+    if (loadMore && !staffHasMorePages.value) return;
+
+    try {
+      if (loadMore) {
+        staffCurrentPage.value++;
+      } else {
+        staffCurrentPage.value = 1;
+        staffList.clear();
+      }
+
+      isStaffLoading.value = true;
+      staffApiStatus.value = ApiCallStatus.loading;
+
+      final response = await HomeRepository.listStaff(
+        page: staffCurrentPage.value,
+        pageSize: 10,
+      );
+
+      if (response.success && response.data != null) {
+        final staffResponse =
+            StaffListResponse.fromJson(response.data as Map<String, dynamic>);
+
+        if (loadMore) {
+          staffList.addAll(staffResponse.result);
+        } else {
+          staffList.value = staffResponse.result;
+        }
+
+        staffTotalPages.value = staffResponse.pagination.totalPages;
+        staffHasMorePages.value =
+            staffCurrentPage.value < staffResponse.pagination.totalPages;
+
+        staffApiStatus.value = ApiCallStatus.success;
+      } else {
+        staffApiStatus.value = ApiCallStatus.error;
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      staffApiStatus.value = ApiCallStatus.error;
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isStaffLoading.value = false;
+    }
+  }
+
+  // ─── Fetch Call History (with pagination) ───
+  Future<void> fetchCallHistory({bool loadMore = false}) async {
+    if (loadMore && !callHistoryHasMorePages.value) return;
+
+    try {
+      if (loadMore) {
+        callHistoryCurrentPage.value++;
+      } else {
+        callHistoryCurrentPage.value = 1;
+        callHistoryList.clear();
+      }
+
+      isCallHistoryLoading.value = true;
+      callHistoryApiStatus.value = ApiCallStatus.loading;
+
+      final response = await HomeRepository.callHistory(
+        page: callHistoryCurrentPage.value,
+        pageSize: 10,
+      );
+
+      if (response.success && response.data != null) {
+        final historyResponse = CallHistoryListResponse.fromJson(
+            response.data as Map<String, dynamic>);
+
+        if (loadMore) {
+          callHistoryList.addAll(historyResponse.result);
+        } else {
+          callHistoryList.value = historyResponse.result;
+        }
+
+        callHistoryTotalPages.value = historyResponse.pagination.totalPages;
+        callHistoryHasMorePages.value =
+            callHistoryCurrentPage.value < historyResponse.pagination.totalPages;
+
+        callHistoryApiStatus.value = ApiCallStatus.success;
+      } else {
+        callHistoryApiStatus.value = ApiCallStatus.error;
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      callHistoryApiStatus.value = ApiCallStatus.error;
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isCallHistoryLoading.value = false;
+    }
   }
 
   // ─── Fetch Plans (with pagination) ───

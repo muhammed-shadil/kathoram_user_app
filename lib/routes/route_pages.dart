@@ -75,6 +75,9 @@ class RoutePages {
     GetPage(
       name: RoutePath.forgotPassword,
       page: () => ForgotPasswordScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
+      }),
       transition: transition,
     ),
     GetPage(
@@ -91,12 +94,18 @@ class RoutePages {
     ),
     GetPage(
       name: RoutePath.otp,
-      page: () => const OTPScreen(),
+      page: () => OTPScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
+      }),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.changePassword,
-      page: () => const ChangePasswordScreen(),
+      page: () => ChangePasswordScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
+      }),
       transition: transition,
     ),
   ];

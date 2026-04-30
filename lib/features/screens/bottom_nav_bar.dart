@@ -17,7 +17,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
   final List<Widget> _screens = [
     const ChatHomeScreen(),
-    CallHistoryScreen(),
+    const CallHistoryScreen(),
     const AddCoinsScreen(),
     const ProfileScreen(),
   ];

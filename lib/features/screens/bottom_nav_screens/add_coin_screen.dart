@@ -4,6 +4,7 @@ import 'package:kathoram_app/features/authentication/controller/auth_controller.
 import 'package:kathoram_app/features/home/controller/home_controller.dart';
 import 'package:kathoram_app/features/home/model/plan_model.dart';
 import 'package:kathoram_app/features/screens/payment_screen.dart';
+import 'package:kathoram_app/features/widgets/shimmer_loaders.dart';
 
 class AddCoinsScreen extends StatefulWidget {
   const AddCoinsScreen({super.key});
@@ -100,48 +101,62 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
             final isLoading = homeController.isPlansLoading.value;
 
             if (isLoading && plansList.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
+              return const PlansGridShimmer();
             }
 
             if (plansList.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No plans available',
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+              return RefreshIndicator(
+                onRefresh: () => homeController.fetchPlans(),
+                child: ListView(
+                  children: const [
+                    SizedBox(height: 200),
+                    Center(
+                      child: Text(
+                        'No plans available',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ),
+                  ],
                 ),
               );
             }
 
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: GridView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: plansList.length + (isLoading ? 1 : 0),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 4,
-                    crossAxisSpacing: 4,
+            return RefreshIndicator(
+              onRefresh: () async {
+                await homeController.fetchPlans();
+                await authController.checkIsLogin();
+              },
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: plansList.length + (isLoading ? 1 : 0),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                    ),
+                    itemBuilder: (context, index) {
+                      // Loading indicator at the end
+                      if (index >= plansList.length) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+
+                      final plan = plansList[index];
+                      final isValuePack =
+                          _isValuePack(index, plansList.length);
+
+                      return _buildPlanCard(plan, isValuePack);
+                    },
                   ),
-                  itemBuilder: (context, index) {
-                    // Loading indicator at the end
-                    if (index >= plansList.length) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-
-                    final plan = plansList[index];
-                    final isValuePack =
-                        _isValuePack(index, plansList.length);
-
-                    return _buildPlanCard(plan, isValuePack);
-                  },
                 ),
               ),
             );

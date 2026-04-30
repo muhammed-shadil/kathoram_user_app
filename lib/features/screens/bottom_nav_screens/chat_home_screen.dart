@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/models/user.dart';
+import 'package:kathoram_app/features/home/controller/home_controller.dart';
 import 'package:kathoram_app/features/screens/bottom_nav_bar.dart';
 import 'package:kathoram_app/features/widgets/user_tile.dart';
+import 'package:kathoram_app/features/widgets/shimmer_loaders.dart';
 import 'package:kathoram_app/features/authentication/controller/auth_controller.dart';
 
 class ChatHomeScreen extends StatefulWidget {
@@ -13,69 +14,29 @@ class ChatHomeScreen extends StatefulWidget {
   State<ChatHomeScreen> createState() => _ChatHomeScreenState();
 }
 
-class _ChatHomeScreenState extends State<ChatHomeScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  final List<User> users = [
-    User(
-        name: "Isha Fathima",
-        age: 25,
-        language: "Malayali",
-        image: "assets/images/girl1.png",
-        isOnline: true,
-        ratePerSec: 5),
-    User(
-        name: "Priya Kumar",
-        age: 23,
-        language: "Malayali",
-        image: "assets/images/girl2.png",
-        isOnline: true,
-        ratePerSec: 5),
-    User(
-        name: "Julie James",
-        age: 24,
-        language: "Malayali",
-        image: "assets/images/girl3.png",
-        isOnCall: true,
-        ratePerSec: 5),
-    User(
-        name: "Riya",
-        age: 24,
-        language: "Malayali",
-        image: "assets/images/girl4.png",
-        isOnline: true,
-        ratePerSec: 5),
-    User(
-        name: "Geetha",
-        age: 26,
-        language: "Malayali",
-        image: "assets/images/girl5.png",
-        isOnline: true,
-        ratePerSec: 5),
-    User(
-        name: "Diya Krishna",
-        age: 22,
-        language: "Malayali",
-        image: "assets/images/girl6.png",
-        isOnline: false,
-        ratePerSec: 5),
-  ];
+class _ChatHomeScreenState extends State<ChatHomeScreen> {
+  late final HomeController homeController;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
-    _tabController = TabController(length: 3, vsync: this);
     super.initState();
+    homeController = Get.find<HomeController>();
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 200 &&
+          !homeController.isStaffLoading.value &&
+          homeController.staffHasMorePages.value) {
+        homeController.fetchStaffList(loadMore: true);
+      }
+    });
   }
 
-  Widget buildTabContent() {
-    return ListView.builder(
-      padding: EdgeInsets.zero,
-      itemCount: users.length,
-      itemBuilder: (context, index) {
-        return UserTile(user: users[index]);
-      },
-    );
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   int selectedIndex = 0;
@@ -93,7 +54,6 @@ class _ChatHomeScreenState extends State<ChatHomeScreen>
         backgroundColor: const Color(0xFFF2F2F2),
         body: Column(
           children: [
-            /// BLUE HEADER
             /// BLUE HEADER
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.23,
@@ -182,76 +142,66 @@ class _ChatHomeScreenState extends State<ChatHomeScreen>
               ),
             ),
 
+            /// STAFF LIST
             Expanded(
               child: Container(
                 decoration: const BoxDecoration(
                   color: Color(0xFFF2F2F2),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
                 ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
+                child: Obx(() {
+                  final staff = homeController.staffList;
+                  final isLoading = homeController.isStaffLoading.value;
 
-                    /// PROFESSIONAL SEGMENTED TAB
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Container(
-                        height: 45,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE6E6E6),
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: TabBar(
-                          padding: EdgeInsets.zero,
-                          controller: _tabController,
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          dividerColor: Colors.transparent,
-                          indicator: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          indicatorPadding: const EdgeInsets.all(4),
-                          labelColor: Colors.black,
-                          unselectedLabelColor: Colors.grey,
-                          labelStyle: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                          unselectedLabelStyle: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                          tabs: const [
-                            Tab(child: Center(child: Text("All"))),
-                            Tab(child: Center(child: Text("New"))),
-                            Tab(child: Center(child: Text("Popular"))),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 5,
-                    ),
+                  if (isLoading && staff.isEmpty) {
+                    return const StaffListShimmer();
+                  }
 
-                    /// USER LIST
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          buildTabContent(),
-                          buildTabContent(),
-                          buildTabContent(),
+                  if (staff.isEmpty) {
+                    return RefreshIndicator(
+                      onRefresh: () => homeController.fetchStaffList(),
+                      child: ListView(
+                        children: const [
+                          SizedBox(height: 200),
+                          Center(
+                            child: Text(
+                              'No users available',
+                              style: TextStyle(fontSize: 16, color: Colors.grey),
+                            ),
+                          ),
                         ],
                       ),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () => homeController.fetchStaffList(),
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.only(top: 12),
+                      itemCount: staff.length + (isLoading ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index >= staff.length) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        final member = staff[index];
+                        return UserTile(
+                          key: ValueKey(member.id),
+                          index: index,
+                        );
+                      },
                     ),
-                  ],
-                ),
+                  );
+                }),
               ),
-            )
+            ),
           ],
         ),
-
-        /// BOTTOM NAVIGATION
       ),
     );
   }

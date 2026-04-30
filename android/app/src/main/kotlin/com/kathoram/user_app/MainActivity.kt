@@ -1,4 +1,4 @@
-package com.example.kathoram_app
+package com.kathoram.user_app
 
 import io.flutter.embedding.android.FlutterActivity
 

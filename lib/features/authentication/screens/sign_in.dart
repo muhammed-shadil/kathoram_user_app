@@ -85,24 +85,37 @@ class SignInScreen extends StatelessWidget {
                       const SizedBox(height: 20),
 
                       /// Google Button
-                      Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.blue),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              "assets/images/google.png",
-                              height: 20,
-                              width: 20,
-                            ),
-                            const SizedBox(width: 5),
-                            const Text("Continue With Google"),
-                          ],
-                        ),
+                      Obx(
+                        () => authController.isGoogleLoading.value
+                            ? const SizedBox(
+                                height: 50,
+                                child: Center(child: CircularProgressIndicator()),
+                              )
+                            : GestureDetector(
+                                onTap: () {
+                                  authController.googleSignIn();
+                                },
+                                child: Container(
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF048EF2).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(30),
+                                    border: Border.all(color: Colors.blue),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.asset(
+                                        "assets/images/google.png",
+                                        height: 20,
+                                        width: 20,
+                                      ),
+                                      const SizedBox(width: 5),
+                                      const Text("Continue With Google"),
+                                    ],
+                                  ),
+                                ),
+                              ),
                       ),
 
                       const SizedBox(height: 10),
@@ -141,11 +154,18 @@ class SignInScreen extends StatelessWidget {
                       const Text("Or"),
                       const SizedBox(height: 15),
 
-                      CustomOutlineButton(
-                        text: "Continue As Guest",
-                        onTap: () {
-                          Get.offNamed('/guestSignup');
-                        },
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Color(0xFF048EF2).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(30),
+                          // border: Border.all(color: Colors.blue),
+                        ),
+                        child: CustomOutlineButton(
+                          text: "Continue As Guest",
+                          onTap: () {
+                            Get.offNamed('/guestSignup');
+                          },
+                        ),
                       ),
 
                       const SizedBox(height: 20),
