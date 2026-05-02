@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/features/authentication/controller/auth_controller.dart';
-import 'package:kathoram_app/features/home/controller/home_controller.dart';
-import 'package:kathoram_app/features/home/model/plan_model.dart';
-import 'package:kathoram_app/features/screens/payment_screen.dart';
-import 'package:kathoram_app/features/widgets/shimmer_loaders.dart';
+import 'package:kathoram_user_app/features/authentication/controller/auth_controller.dart';
+import 'package:kathoram_user_app/features/home/controller/home_controller.dart';
+import 'package:kathoram_user_app/features/home/model/plan_model.dart';
+import 'package:kathoram_user_app/features/screens/payment_screen.dart';
+import 'package:kathoram_user_app/features/widgets/shimmer_loaders.dart';
 
 class AddCoinsScreen extends StatefulWidget {
   const AddCoinsScreen({super.key});

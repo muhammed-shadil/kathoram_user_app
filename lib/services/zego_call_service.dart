@@ -70,8 +70,11 @@ class ZegoCallService {
       userID: userID,
       userName: userName,
       plugins: [ZegoUIKitSignalingPlugin()],
+      ringtoneConfig: ZegoCallRingtoneConfig(
+        incomingCallPath: 'assets/sounds/teams_ringtone.mp3',
+        outgoingCallPath: 'assets/sounds/teams_ringtone.mp3',
+      ),
       invitationEvents: ZegoUIKitPrebuiltCallInvitationEvents(
-        
         onError: (error) {
           log('[ZegoCallService] Error: ${error.code} — ${error.message}');
         },
@@ -108,9 +111,9 @@ class ZegoCallService {
         androidNotificationConfig: ZegoCallAndroidNotificationConfig(
           showFullScreen: true,
           callChannel: ZegoCallAndroidNotificationChannelConfig(
-            channelID: "ZegoUIKit",
+            channelID: "ZegoCallChannelV3",
             channelName: "Call Notifications",
-            sound: "call",
+            sound: "teams_ringtone",
             icon: "call",
           ),
           missedCallChannel: ZegoCallAndroidNotificationChannelConfig(
@@ -137,7 +140,10 @@ class ZegoCallService {
           ..turnOnCameraWhenJoining = false
           ..turnOnMicrophoneWhenJoining = true
           ..useSpeakerWhenJoining = false;
-
+        config.layout = ZegoLayout.pictureInPicture(
+          isSmallViewDraggable: false,
+          smallViewSize: Size.zero, // 🔥 THIS removes the small preview
+        );
         config.topMenuBar.isVisible = true;
         config.topMenuBar.buttons.insert(
           0,
@@ -147,7 +153,7 @@ class ZegoCallService {
         return config;
       },
     );
- 
+
     _isInitialized = true;
     log('[ZegoCallService] User logged in to Zego — userID: $userID');
   }

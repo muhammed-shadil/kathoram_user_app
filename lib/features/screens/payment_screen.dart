@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/features/home/controller/home_controller.dart';
-import 'package:kathoram_app/features/home/model/plan_model.dart';
-import 'package:kathoram_app/features/widgets/custom_button.dart';
+import 'package:kathoram_user_app/features/home/controller/home_controller.dart';
+import 'package:kathoram_user_app/features/home/model/plan_model.dart';
+import 'package:kathoram_user_app/features/widgets/custom_button.dart';
 
 class PaymentScreen extends StatelessWidget {
   final PlanModel plan;

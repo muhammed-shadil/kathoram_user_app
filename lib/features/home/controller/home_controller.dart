@@ -52,6 +52,10 @@ class HomeController extends GetxController {
   var activeCallId = RxnString(); // backend call _id from initiate-call
   var isInCall = false.obs; // whether user is currently in a Zego call
 
+  // ─── Animated Move-to-Top ───
+  /// Tracks the staff ID that was just moved to the top of the list (for animation).
+  var recentlyMovedToTopId = RxnString();
+
   // ─── Socket Service ───
   late SocketService _socketService;
 
@@ -143,21 +147,20 @@ class HomeController extends GetxController {
         if (index != -1) {
           final old = staffList[index];
           log('[Socket] Updating "${old.name}" status: "${old.status}" → "$newStatus"');
-          staffList[index] = StaffModel(
-            id: old.id,
-            active: old.active,
-            tagId: old.tagId,
-            userType: old.userType,
-            name: old.name,
-            age: old.age,
-            coinsPerSec: old.coinsPerSec,
-            language: old.language,
-            profileImage: old.profileImage,
-            status: newStatus,
-            updatedAt: old.updatedAt,
-            createdAt: old.createdAt,
-          );
-          staffList.refresh();
+
+          // If going online and not already at the top, move to position 0
+          // so the UI can play an entrance animation.
+          if (newStatus == 'online' && old.status != 'online' && index > 0) {
+            final updatedStaff = old.copyWith(status: newStatus);
+            // Operate on the underlying list to avoid multiple reactive notifications
+            staffList.value.removeAt(index);
+            staffList.value.insert(0, updatedStaff);
+            recentlyMovedToTopId.value = staffId;
+            staffList.refresh(); // single notification
+          } else {
+            staffList[index] = old.copyWith(status: newStatus);
+            staffList.refresh();
+          }
         }
       }
     });

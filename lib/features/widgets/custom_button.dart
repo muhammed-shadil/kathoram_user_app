@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:kathoram_app/theme/app_colors.dart';
+import 'package:kathoram_user_app/theme/app_colors.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;

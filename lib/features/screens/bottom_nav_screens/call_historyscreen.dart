@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/features/home/controller/home_controller.dart';
-import 'package:kathoram_app/features/home/model/call_history_model.dart';
-import 'package:kathoram_app/features/widgets/shimmer_loaders.dart';
+import 'package:kathoram_user_app/features/home/controller/home_controller.dart';
+import 'package:kathoram_user_app/features/home/model/call_history_model.dart';
+import 'package:kathoram_user_app/features/widgets/shimmer_loaders.dart';
 
 class CallHistoryScreen extends StatefulWidget {
   const CallHistoryScreen({super.key});

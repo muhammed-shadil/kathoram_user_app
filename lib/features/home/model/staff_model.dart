@@ -45,6 +45,24 @@ class StaffModel {
   bool get isOnline => status == "online";
   bool get isOnCall => status == "oncall" || status == "on_call";
   bool get isOffline => status == "offline" || status.isEmpty;
+
+  /// Returns a copy with an optional new [status].
+  StaffModel copyWith({String? status}) {
+    return StaffModel(
+      id: id,
+      active: active,
+      tagId: tagId,
+      userType: userType,
+      name: name,
+      age: age,
+      coinsPerSec: coinsPerSec,
+      language: language,
+      profileImage: profileImage,
+      status: status ?? this.status,
+      updatedAt: updatedAt,
+      createdAt: createdAt,
+    );
+  }
 }
 
 class StaffListResponse {

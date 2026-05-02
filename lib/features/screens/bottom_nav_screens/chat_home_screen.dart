@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/features/home/controller/home_controller.dart';
-import 'package:kathoram_app/features/screens/bottom_nav_bar.dart';
-import 'package:kathoram_app/features/widgets/user_tile.dart';
-import 'package:kathoram_app/features/widgets/shimmer_loaders.dart';
-import 'package:kathoram_app/features/authentication/controller/auth_controller.dart';
+import 'package:kathoram_user_app/features/home/controller/home_controller.dart';
+import 'package:kathoram_user_app/features/screens/bottom_nav_bar.dart';
+import 'package:kathoram_user_app/features/widgets/user_tile.dart';
+import 'package:kathoram_user_app/features/widgets/shimmer_loaders.dart';
+import 'package:kathoram_user_app/features/authentication/controller/auth_controller.dart';
 
 class ChatHomeScreen extends StatefulWidget {
   const ChatHomeScreen({super.key});
@@ -17,6 +17,7 @@ class ChatHomeScreen extends StatefulWidget {
 class _ChatHomeScreenState extends State<ChatHomeScreen> {
   late final HomeController homeController;
   final ScrollController _scrollController = ScrollController();
+  Worker? _moveWorker;
 
   @override
   void initState() {
@@ -31,10 +32,24 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         homeController.fetchStaffList(loadMore: true);
       }
     });
+
+    // Auto-scroll to top when a staff member moves there via socket event
+    _moveWorker = ever(homeController.recentlyMovedToTopId, (staffId) {
+      if (staffId != null &&
+          _scrollController.hasClients &&
+          _scrollController.offset < 200) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
+    _moveWorker?.dispose();
     _scrollController.dispose();
     super.dispose();
   }

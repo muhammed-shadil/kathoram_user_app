@@ -4,14 +4,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:kathoram_app/firebase_options.dart';
-import 'package:kathoram_app/local_storage/shared_pref.dart';
-import 'package:kathoram_app/routes/route_pages.dart';
-import 'package:kathoram_app/routes/route_path.dart';
+import 'package:kathoram_user_app/firebase_options.dart';
+import 'package:kathoram_user_app/local_storage/shared_pref.dart';
+import 'package:kathoram_user_app/routes/route_pages.dart';
+import 'package:kathoram_user_app/routes/route_path.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:kathoram_app/services/firebase_fcm.dart';
-import 'package:kathoram_app/services/zego_call_service.dart';
-import 'package:kathoram_app/utils/navigator_key_utils.dart';
+import 'package:kathoram_user_app/services/firebase_fcm.dart';
+import 'package:kathoram_user_app/services/zego_call_service.dart';
+import 'package:kathoram_user_app/utils/navigator_key_utils.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 
 void main() async {

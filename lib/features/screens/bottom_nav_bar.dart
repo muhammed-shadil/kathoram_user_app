@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:kathoram_app/features/screens/bottom_nav_screens/add_coin_screen.dart';
-import 'package:kathoram_app/features/screens/bottom_nav_screens/call_historyscreen.dart';
-import 'package:kathoram_app/features/screens/bottom_nav_screens/chat_home_screen.dart';
-import 'package:kathoram_app/features/screens/bottom_nav_screens/profile_screen.dart';
+import 'package:kathoram_user_app/features/screens/bottom_nav_screens/add_coin_screen.dart';
+import 'package:kathoram_user_app/features/screens/bottom_nav_screens/call_historyscreen.dart';
+import 'package:kathoram_user_app/features/screens/bottom_nav_screens/chat_home_screen.dart';
+import 'package:kathoram_user_app/features/screens/bottom_nav_screens/profile_screen.dart';
 
 class BottomNavBar extends StatefulWidget {
   final int initialIndex;

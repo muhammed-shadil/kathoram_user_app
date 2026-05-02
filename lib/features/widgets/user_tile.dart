@@ -5,20 +5,103 @@ import '../../features/authentication/controller/auth_controller.dart';
 import '../../features/home/controller/home_controller.dart';
 import '../../services/zego_call_service.dart';
 
-class UserTile extends StatelessWidget {
+class UserTile extends StatefulWidget {
   final int index;
 
   const UserTile({super.key, required this.index});
 
   @override
-  Widget build(BuildContext context) {
-    final homeController = Get.find<HomeController>();
+  State<UserTile> createState() => _UserTileState();
+}
 
+class _UserTileState extends State<UserTile>
+    with SingleTickerProviderStateMixin {
+  final HomeController _homeController = Get.find<HomeController>();
+
+  AnimationController? _animController;
+  Animation<Offset>? _slideAnimation;
+  Animation<double>? _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndStartAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant UserTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When Flutter moves this widget to a new index (via ValueKey),
+    // check if it should play the entrance animation at the top.
+    if (oldWidget.index != widget.index) {
+      _checkAndStartAnimation();
+    }
+  }
+
+  /// If this tile is at position 0 and was just moved there, start the
+  /// slide-in + fade-in entrance animation.
+  void _checkAndStartAnimation() {
+    if (widget.index != 0) return;
+    if (widget.index >= _homeController.staffList.length) return;
+
+    final staff = _homeController.staffList[widget.index];
+    if (_homeController.recentlyMovedToTopId.value == staff.id) {
+      _startEntranceAnimation();
+      // Clear the flag after this frame so other tiles don't re-trigger.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_homeController.recentlyMovedToTopId.value == staff.id) {
+          _homeController.recentlyMovedToTopId.value = null;
+        }
+      });
+    }
+  }
+
+  void _startEntranceAnimation() {
+    _animController?.dispose();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0.0, -1.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController!,
+      curve: Curves.easeOutCubic,
+    ));
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animController!,
+      curve: Curves.easeIn,
+    ));
+    _animController!.forward().then((_) {
+      // Clean up after animation completes to remove the wrapper widgets.
+      if (mounted) {
+        setState(() {
+          _animController?.dispose();
+          _animController = null;
+          _slideAnimation = null;
+          _fadeAnimation = null;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _animController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Obx(() {
-      if (index >= homeController.staffList.length) {
+      if (widget.index >= _homeController.staffList.length) {
         return const SizedBox.shrink();
       }
-      final staff = homeController.staffList[index];
+      final staff = _homeController.staffList[widget.index];
 
       Color statusColor;
       String statusText;
@@ -40,9 +123,9 @@ class UserTile extends StatelessWidget {
 
       final name = staff.name.isNotEmpty ? staff.name : "User";
       final initial = name[0].toUpperCase();
-      final isLoading = homeController.isCallLoading.value;
+      final isLoading = _homeController.isCallLoading.value;
 
-      return Container(
+      Widget tile = Container(
         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -169,6 +252,21 @@ class UserTile extends StatelessWidget {
           ],
         ),
       );
+
+      // Wrap with entrance animation when the tile was just moved to the top.
+      if (_animController != null &&
+          _slideAnimation != null &&
+          _fadeAnimation != null) {
+        return SlideTransition(
+          position: _slideAnimation!,
+          child: FadeTransition(
+            opacity: _fadeAnimation!,
+            child: tile,
+          ),
+        );
+      }
+
+      return tile;
     });
   }
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:kathoram_app/models/coins_model.dart';
+import 'package:kathoram_user_app/models/coins_model.dart';
 
 import 'package:flutter/material.dart';
 
 import 'package:flutter/material.dart';
-import 'package:kathoram_app/models/coins_model.dart';
+import 'package:kathoram_user_app/models/coins_model.dart';
 
 class AddCoinsDoneScreen extends StatefulWidget {
   const AddCoinsDoneScreen({super.key});
