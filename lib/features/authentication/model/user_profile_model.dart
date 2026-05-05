@@ -4,6 +4,7 @@ class UserProfileData {
   final String tagId;
   final String userType;
   final String name;
+  final String email;
   final String mobileNumber;
   final String rawPass;
   final int dob;
@@ -21,6 +22,7 @@ class UserProfileData {
     required this.tagId,
     required this.userType,
     required this.name,
+    required this.email,
     required this.mobileNumber,
     required this.rawPass,
     required this.dob,
@@ -40,6 +42,7 @@ class UserProfileData {
         tagId: json["tagId"] ?? "",
         userType: json["userType"] ?? "",
         name: json["name"] ?? "",
+        email: json["email"] ?? "",
         mobileNumber: json["mobileNumber"] ?? "",
         rawPass: json["rawPass"] ?? "",
         dob: json["dob"] ?? 0,
@@ -58,6 +61,7 @@ class UserProfileData {
         "tagId": tagId,
         "userType": userType,
         "name": name,
+        "email": email,
         "mobileNumber": mobileNumber,
         "rawPass": rawPass,
         "dob": dob,

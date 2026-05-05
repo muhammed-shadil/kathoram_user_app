@@ -11,6 +11,7 @@ class ApiConstants {
   static const String sendOtp = 'api/v1/user/send-otp';
   static const String verifyOtp = 'api/v1/user/verify-otp';
   static const String passwordUpdate = 'api/v1/user/password-update';
+  static const String editProfile = 'api/v1/user/edit';
 
   // Plan endpoints
   static const String planList = 'api/v1/user/plan/list';

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../authentication/controller/auth_controller.dart';
@@ -80,7 +79,7 @@ class ForgotPasswordScreen extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "Enter your mobile number to receive an OTP",
+              "Enter your email to receive an OTP",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
@@ -91,14 +90,10 @@ class ForgotPasswordScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 25),
             child: TextField(
-              controller: authController.forgotMobileController,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(10),
-              ],
+              controller: authController.forgotEmailController,
+              keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
-                hintText: "Enter Mobile Number",
+                hintText: "Enter Email",
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),

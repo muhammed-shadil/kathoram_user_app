@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../routes/route_path.dart';
 import '../../authentication/controller/auth_controller.dart';
 import '../../widgets/shimmer_loaders.dart';
 
@@ -84,26 +85,58 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 55),
 
-                  /// PROFILE IMAGE
+                  /// PROFILE IMAGE (with edit overlay)
                   Center(
-                    child: profileImage.isNotEmpty
-                        ? CircleAvatar(
-                            radius: 45,
-                            backgroundImage: NetworkImage(profileImage),
-                            backgroundColor: Colors.grey.shade300,
-                          )
-                        : CircleAvatar(
-                            radius: 45,
-                            backgroundColor: Colors.red,
-                            child: Text(
-                              initial,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
+                    child: SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: profileImage.isNotEmpty
+                                ? CircleAvatar(
+                                    radius: 45,
+                                    backgroundImage: NetworkImage(profileImage),
+                                    backgroundColor: Colors.grey.shade300,
+                                  )
+                                : CircleAvatar(
+                                    radius: 45,
+                                    backgroundColor: Colors.red,
+                                    child: Text(
+                                      initial,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  Get.toNamed(RoutePath.editProfile),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: Colors.blue, width: 1.5),
+                                ),
+                                child: const Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
                               ),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 10),

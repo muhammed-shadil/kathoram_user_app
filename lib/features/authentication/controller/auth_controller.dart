@@ -29,10 +29,17 @@ class AuthController extends GetxController {
   final signupConfirmPasswordController = TextEditingController();
 
   // ─── Forgot Password Fields ───
-  final forgotMobileController = TextEditingController();
+  final forgotEmailController = TextEditingController();
   final otpControllers = List.generate(4, (_) => TextEditingController());
   final newPasswordController = TextEditingController();
   final confirmNewPasswordController = TextEditingController();
+
+  // ─── Edit Profile Fields ───
+  final editNameController = TextEditingController();
+  final editEmailController = TextEditingController();
+  final editMobileController = TextEditingController();
+  final editPasswordController = TextEditingController();
+  final editConfirmPasswordController = TextEditingController();
 
   /// Temporary token received after OTP verification (used for password update)
   var _forgotPasswordToken = '';
@@ -290,8 +297,13 @@ class AuthController extends GetxController {
 
   // ─── Send OTP (Forgot Password) ───
   Future<void> sendOtp() async {
-    if (forgotMobileController.text.trim().isEmpty) {
-      Fluttertoast.showToast(msg: "Please enter your mobile number");
+    final email = forgotEmailController.text.trim();
+    if (email.isEmpty) {
+      Fluttertoast.showToast(msg: "Please enter your email");
+      return;
+    }
+    if (!GetUtils.isEmail(email)) {
+      Fluttertoast.showToast(msg: "Please enter a valid email");
       return;
     }
 
@@ -299,7 +311,7 @@ class AuthController extends GetxController {
       isLoading.value = true;
 
       final payload = {
-        "mobileNumber": forgotMobileController.text.trim(),
+        "email": email,
       };
 
       final response = await AuthRepository.sendOtp(payload);
@@ -329,7 +341,7 @@ class AuthController extends GetxController {
       isLoading.value = true;
 
       final payload = {
-        "mobileNumber": forgotMobileController.text.trim(),
+        "email": forgotEmailController.text.trim(),
         "otp": otp,
       };
 
@@ -390,6 +402,68 @@ class AuthController extends GetxController {
     }
   }
 
+  // ─── Prefill Edit-Profile fields from current profile ───
+  void prefillEditProfileFields() {
+    final profile = userProfile.value;
+    if (profile == null) return;
+    editNameController.text = profile.name;
+    editEmailController.text = profile.email;
+    editMobileController.text = profile.mobileNumber;
+    editPasswordController.clear();
+    editConfirmPasswordController.clear();
+  }
+
+  // ─── Edit Profile (PATCH api/v1/user/edit) ───
+  Future<void> editProfile() async {
+    final name = editNameController.text.trim();
+    final email = editEmailController.text.trim();
+    final mobile = editMobileController.text.trim();
+    final pass = editPasswordController.text.trim();
+    final confirmPass = editConfirmPasswordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || mobile.isEmpty) {
+      Fluttertoast.showToast(msg: "Name, email and mobile are required");
+      return;
+    }
+    if (!GetUtils.isEmail(email)) {
+      Fluttertoast.showToast(msg: "Please enter a valid email");
+      return;
+    }
+    if (pass.isNotEmpty && pass != confirmPass) {
+      Fluttertoast.showToast(msg: "Passwords do not match");
+      return;
+    }
+
+    // Build payload with only the editable fields. Password is included
+    // only when the user actually typed one (leave blank to skip change).
+    final payload = <String, dynamic>{
+      "name": name,
+      "email": email,
+      "mobileNumber": mobile,
+    };
+    if (pass.isNotEmpty) {
+      payload["password"] = pass;
+    }
+
+    try {
+      isLoading.value = true;
+      final response = await AuthRepository.editProfile(payload);
+
+      if (response.success) {
+        Fluttertoast.showToast(msg: response.message);
+        // Refresh profile so UI shows updated values
+        await checkIsLogin();
+        Get.back();
+      } else {
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   // ─── Resend OTP ───
   Future<void> resendOtp() async {
     // Clear OTP fields
@@ -400,7 +474,7 @@ class AuthController extends GetxController {
       isLoading.value = true;
 
       final payload = {
-        "mobileNumber": forgotMobileController.text.trim(),
+        "email": forgotEmailController.text.trim(),
       };
 
       final response = await AuthRepository.sendOtp(payload);
@@ -542,7 +616,7 @@ class AuthController extends GetxController {
 
   // ─── Clear forgot password fields ───
   void clearForgotPasswordFields() {
-    forgotMobileController.clear();
+    forgotEmailController.clear();
     for (var c in otpControllers) {
       c.clear();
     }

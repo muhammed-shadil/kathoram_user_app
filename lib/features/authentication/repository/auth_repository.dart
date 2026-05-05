@@ -197,6 +197,30 @@ class AuthRepository {
     return response;
   }
 
+  /// Edit Profile API call - PATCH api/v1/user/edit
+  static Future<ApiBaseModel> editProfile(Map<String, dynamic> payload) async {
+    late ApiBaseModel response;
+    await BaseClient.shared.safeApiCall(
+      ApiConstants.editProfile,
+      RequestType.patch,
+      data: payload,
+      onSuccess: (s) {
+        response = s;
+      },
+      onError: (s) {
+        s.fold(
+          (l) {
+            throw l.message;
+          },
+          (l) {
+            throw l;
+          },
+        );
+      },
+    );
+    return response;
+  }
+
   /// Password Update API call
   static Future<ApiBaseModel> passwordUpdate(
       Map<String, dynamic> payload, String accessToken) async {

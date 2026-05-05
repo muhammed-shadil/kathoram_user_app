@@ -8,6 +8,7 @@ enum RequestType {
   get,
   post,
   put,
+  patch,
   delete,
 }
 
@@ -112,6 +113,16 @@ class BaseClient {
           break;
         case RequestType.put:
           response = await dioInstance.put(
+            url,
+            data: data,
+            onReceiveProgress: onReceiveProgress,
+            onSendProgress: onSendProgress,
+            queryParameters: queryParameters,
+            options: option,
+          );
+          break;
+        case RequestType.patch:
+          response = await dioInstance.patch(
             url,
             data: data,
             onReceiveProgress: onReceiveProgress,

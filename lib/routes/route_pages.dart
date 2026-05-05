@@ -8,6 +8,7 @@ import 'package:kathoram_user_app/features/screens/bottom_nav_bar.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/add_coin_screen.dart';
 import 'package:kathoram_user_app/features/screens/call_screen.dart';
 import 'package:kathoram_user_app/features/screens/change_password.dart';
+import 'package:kathoram_user_app/features/screens/edit_profile_screen.dart';
 import 'package:kathoram_user_app/features/screens/forgot_screen.dart';
 import 'package:kathoram_user_app/features/screens/guest_signup_screen.dart';
 import 'package:kathoram_user_app/features/screens/onboarding_screen.dart';
@@ -103,6 +104,14 @@ class RoutePages {
     GetPage(
       name: RoutePath.changePassword,
       page: () => ChangePasswordScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
+      }),
+      transition: transition,
+    ),
+    GetPage(
+      name: RoutePath.editProfile,
+      page: () => EditProfileScreen(),
       binding: BindingsBuilder(() {
         Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
       }),

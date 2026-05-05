@@ -9,12 +9,20 @@ class OTPScreen extends StatelessWidget {
 
   final AuthController authController = Get.find<AuthController>();
 
+  /// Mask the local part of an email so only the first character is visible:
+  /// e.g. "dathasai@gmail.com" → "d*******@gmail.com"
+  String _maskEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1) return email;
+    final local = email.substring(0, at);
+    final domain = email.substring(at);
+    return '${local[0]}${'*' * (local.length - 1)}$domain';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final mobile = authController.forgotMobileController.text.trim();
-    final maskedMobile = mobile.length >= 4
-        ? '${'*' * (mobile.length - 4)}${mobile.substring(mobile.length - 4)}'
-        : mobile;
+    final email = authController.forgotEmailController.text.trim();
+    final maskedEmail = _maskEmail(email);
 
     return Scaffold(
       backgroundColor: const Color(0xfff2f2f2),
@@ -81,7 +89,7 @@ class OTPScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            "Enter the OTP sent to $maskedMobile",
+            "Enter the OTP sent to $maskedEmail",
             style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 20),

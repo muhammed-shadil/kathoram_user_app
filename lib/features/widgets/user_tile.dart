@@ -226,6 +226,16 @@ class _UserTileState extends State<UserTile>
                             return;
                           }
 
+                          // Insufficient-coins guard: user must have at least
+                          // enough coins for one second of this staff's rate.
+                          if (currentUser.userCoins < staff.coinsPerSec) {
+                            Fluttertoast.showToast(
+                              msg:
+                                  "Insufficient coins to call this user. Please add coins.",
+                            );
+                            return;
+                          }
+
                           ZegoCallService.instance.sendAudioCallToStaff(
                             staffUserID: staff.id,
                             staffUserName: staff.name,

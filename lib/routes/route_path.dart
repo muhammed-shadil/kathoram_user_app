@@ -13,4 +13,5 @@ class RoutePath {
   static String forgotPassword = "/forgotpassword";
   static String otp = "/otp";
   static String changePassword = "/change-password";
+  static String editProfile = "/edit-profile";
 }
