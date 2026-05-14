@@ -1,9 +1,10 @@
 class ApiConstants {
-  static const baseUrl = 'http://localhost:4000/';
+  static const baseUrl = 'http://13.206.185.19/';
 
   // Auth endpoints
   static const String login = 'api/v1/user/login';
   static const String signup = 'api/v1/user/signup';
+  static const String guestLogin = 'api/v1/user/guest-login';
   static const String isLogin = 'api/v1/user/is-login';
   static const String logout = 'api/v1/user/logout';
   static const String deleteAccount = 'api/v1/user/delete';
@@ -25,7 +26,7 @@ class ApiConstants {
   static const String endCall = 'api/v1/user/end-call';
 
   // Socket
-  static const String socketUrl = 'http://localhost:4000';
+  static const String socketUrl = 'http://13.206.185.19';
 
   // Payment endpoints
   static const String paymentInitiate = 'api/v1/user/payment/initiate';

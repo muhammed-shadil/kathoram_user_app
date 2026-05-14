@@ -12,6 +12,7 @@ import '../../../routes/custom_navigator.dart';
 import '../../../services/zego_call_service.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/enum.dart';
+import '../model/guest_login_response_model.dart';
 import '../model/login_response_model.dart';
 import '../model/signup_response_model.dart';
 import '../model/user_profile_model.dart';
@@ -27,6 +28,10 @@ class AuthController extends GetxController {
   final signupMobileController = TextEditingController();
   final signupPasswordController = TextEditingController();
   final signupConfirmPasswordController = TextEditingController();
+
+  // ─── Guest Login Fields ───
+  final guestNameController = TextEditingController();
+  final guestMobileController = TextEditingController();
 
   // ─── Forgot Password Fields ───
   final forgotEmailController = TextEditingController();
@@ -93,6 +98,63 @@ class AuthController extends GetxController {
         Fluttertoast.showToast(msg: response.message);
 
         // Navigate to home
+        CustomNavigator.pushCompleteReplacement(RoutePath.bottomNav);
+      } else {
+        apiCallStatus.value = ApiCallStatus.error;
+        Fluttertoast.showToast(msg: response.message);
+      }
+    } catch (e) {
+      apiCallStatus.value = ApiCallStatus.error;
+      Fluttertoast.showToast(msg: e.toString());
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // ─── Guest Login ───
+  /// Creates a lightweight guest account using only name + mobile number.
+  /// Backend response includes an accessToken; from then on the app behaves
+  /// the same as a fully signed-up user (HomeController.onInit calls
+  /// checkIsLogin which loads the full profile).
+  Future<void> guestLogin() async {
+    final name = guestNameController.text.trim();
+    final mobile = guestMobileController.text.trim();
+
+    if (name.isEmpty || mobile.isEmpty) {
+      Fluttertoast.showToast(msg: "Please enter your name and mobile number");
+      return;
+    }
+
+    if (mobile.length < 10) {
+      Fluttertoast.showToast(msg: "Please enter a valid mobile number");
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+      apiCallStatus.value = ApiCallStatus.loading;
+
+      final payload = {
+        "name": name,
+        "mobileNumber": mobile,
+      };
+
+      final response = await AuthRepository.guestLogin(payload);
+
+      if (response.success && response.data != null) {
+        final guestData = GuestLoginResponseData.fromJson(
+            response.data as Map<String, dynamic>);
+
+        // Persist session in the same way as login/signup so subsequent
+        // authenticated calls (is-login, staff/list, etc.) work normally.
+        await MySharedPref.setAuthToken(guestData.accessToken);
+        await MySharedPref.setLoggedInStatus(true);
+        await MySharedPref.setMobileNumber(guestData.mobileNumber);
+
+        apiCallStatus.value = ApiCallStatus.success;
+        Fluttertoast.showToast(msg: response.message);
+
+        clearGuestFields();
         CustomNavigator.pushCompleteReplacement(RoutePath.bottomNav);
       } else {
         apiCallStatus.value = ApiCallStatus.error;
@@ -612,6 +674,12 @@ class AuthController extends GetxController {
     signupPasswordController.clear();
     signupConfirmPasswordController.clear();
     isTermsAgreed.value = false;
+  }
+
+  // ─── Clear guest login fields ───
+  void clearGuestFields() {
+    guestNameController.clear();
+    guestMobileController.clear();
   }
 
   // ─── Clear forgot password fields ───

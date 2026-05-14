@@ -158,6 +158,32 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
 
+                  /// GUEST TAG ID — shown only for guest accounts so the user
+                  /// can quote it to support when their account has no email.
+                  if (profile.userType.toLowerCase() == "guest" &&
+                      profile.tagId.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Text(
+                          "Guest ID: ${profile.tagId}",
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 20),
 
                   /// MENU BUTTONS

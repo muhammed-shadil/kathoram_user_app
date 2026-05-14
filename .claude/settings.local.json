@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:claude.ai)",
+      "PowerShell($pandoc = Get-Command pandoc -ErrorAction SilentlyContinue; if \\($pandoc\\) { Write-Host \"PANDOC: $\\($pandoc.Source\\)\"; pandoc --version | Select-Object -First 1 } else { Write-Host \"PANDOC: NOT FOUND\" }; $py = Get-Command python -ErrorAction SilentlyContinue; if \\($py\\) { Write-Host \"PYTHON: $\\($py.Source\\)\"; python --version } else { Write-Host \"PYTHON: NOT FOUND\" }; $word = Get-Command winword -ErrorAction SilentlyContinue; if \\($word\\) { Write-Host \"WORD: $\\($word.Source\\)\" } else { try { $w = New-Object -ComObject Word.Application -ErrorAction Stop; Write-Host \"WORD COM: AVAILABLE\"; $w.Quit\\(\\) } catch { Write-Host \"WORD COM: NOT AVAILABLE\" } })",
+      "PowerShell($py = Get-Command py -ErrorAction SilentlyContinue; if \\($py\\) { Write-Host \"PY: $\\($py.Source\\)\"; py --version } else { Write-Host \"PY: NOT FOUND\" }; $py3 = Get-Command python3 -ErrorAction SilentlyContinue; if \\($py3\\) { Write-Host \"PYTHON3: $\\($py3.Source\\)\"; python3 --version } else { Write-Host \"PYTHON3: NOT FOUND\" }; Get-ChildItem \"C:\\\\Users\\\\Muham\\\\Desktop\" -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Write-Host \"DESKTOP_OK: $\\($_.FullName\\)\" })"
+    ]
+  }
+}

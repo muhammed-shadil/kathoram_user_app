@@ -28,6 +28,32 @@ class AuthRepository {
     return response;
   }
 
+  /// Guest Login API call - POST api/v1/user/guest-login
+  /// Payload: { "name": "...", "mobileNumber": "..." }
+  static Future<ApiBaseModel> guestLogin(Map<String, dynamic> payload) async {
+    late ApiBaseModel response;
+    await BaseClient.shared.safeApiCall(
+      ApiConstants.guestLogin,
+      RequestType.post,
+      data: payload,
+      includeAuth: false,
+      onSuccess: (s) {
+        response = s;
+      },
+      onError: (s) {
+        s.fold(
+          (l) {
+            throw l.message;
+          },
+          (l) {
+            throw l;
+          },
+        );
+      },
+    );
+    return response;
+  }
+
   /// Signup API call
   static Future<ApiBaseModel> signup(Map<String, dynamic> payload) async {
     late ApiBaseModel response;

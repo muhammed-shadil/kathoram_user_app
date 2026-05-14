@@ -1,4 +1,9 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:kathoram_user_app/features/authentication/controller/auth_controller.dart';
+import 'package:kathoram_user_app/features/home/controller/home_controller.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/add_coin_screen.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/call_historyscreen.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/chat_home_screen.dart';
@@ -13,7 +18,7 @@ class BottomNavBar extends StatefulWidget {
 }
 
 class _BottomNavBarState extends State<BottomNavBar> {
- late  int _selectedIndex;
+  late int _selectedIndex;
 
   final List<Widget> _screens = [
     const ChatHomeScreen(),
@@ -21,10 +26,48 @@ class _BottomNavBarState extends State<BottomNavBar> {
     const AddCoinsScreen(),
     const ProfileScreen(),
   ];
-    @override
+
+  @override
   void initState() {
     _selectedIndex = widget.initialIndex;
     super.initState();
+  }
+
+  /// Refresh the data for the tab the user just switched to.
+  /// IndexedStack keeps each screen alive, so their initState only fires once
+  /// at startup — without this, switching tabs shows stale data.
+  void _refreshTabData(int index) {
+    HomeController? home;
+    AuthController? auth;
+    try {
+      home = Get.find<HomeController>();
+    } catch (e) {
+      log('[BottomNav] HomeController not found: $e');
+    }
+    try {
+      auth = Get.find<AuthController>();
+    } catch (e) {
+      log('[BottomNav] AuthController not found: $e');
+    }
+
+    log('[BottomNav] Tab switched to $index — refreshing data');
+
+    switch (index) {
+      case 0: // Home — staff list
+        home?.fetchStaffList();
+        auth?.checkIsLogin();
+        break;
+      case 1: // Calls — call history
+        home?.fetchCallHistory();
+        break;
+      case 2: // Add Coins — plans + user balance
+        home?.fetchPlans();
+        auth?.checkIsLogin();
+        break;
+      case 3: // Profile — user data
+        auth?.checkIsLogin();
+        break;
+    }
   }
 
   @override
@@ -59,9 +102,13 @@ class _BottomNavBarState extends State<BottomNavBar> {
           unselectedFontSize: 11,
           type: BottomNavigationBarType.fixed,
           onTap: (index) {
+            final changed = index != _selectedIndex;
             setState(() {
               _selectedIndex = index;
             });
+            if (changed) {
+              _refreshTabData(index);
+            }
           },
           items: const [
             BottomNavigationBarItem(

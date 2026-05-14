@@ -79,6 +79,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                     return RefreshIndicator(
                       onRefresh: () => homeController.fetchCallHistory(),
                       child: ListView(
+                        // AlwaysScrollable so the overscroll gesture works
+                        // even when the list has no items.
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: const [
                           SizedBox(height: 200),
                           Center(
@@ -96,6 +99,9 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
                     onRefresh: () => homeController.fetchCallHistory(),
                     child: ListView.builder(
                       controller: _scrollController,
+                      // AlwaysScrollable so pull-to-refresh triggers even
+                      // when the list is short and content fits the viewport.
+                      physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: history.length + (isLoading ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index >= history.length) {

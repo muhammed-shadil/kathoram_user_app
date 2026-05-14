@@ -48,6 +48,9 @@ class RoutePages {
     GetPage(
       name: RoutePath.guestSignup,
       page: () => GuestSignUpScreen(),
+      binding: BindingsBuilder(() {
+        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
+      }),
       transition: transition,
     ),
     GetPage(

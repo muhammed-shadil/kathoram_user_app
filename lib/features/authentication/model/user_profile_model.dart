@@ -1,3 +1,5 @@
+import 'guest_login_response_model.dart';
+
 class UserProfileData {
   final String id;
   final bool active;
@@ -15,6 +17,8 @@ class UserProfileData {
   final int updatedAt;
   final int createdAt;
   final int userCoins;
+  final String timezone;
+  final CoinsConfigModel? coinsConfig;
 
   UserProfileData({
     required this.id,
@@ -33,6 +37,8 @@ class UserProfileData {
     required this.updatedAt,
     required this.createdAt,
     required this.userCoins,
+    this.timezone = "",
+    this.coinsConfig,
   });
 
   factory UserProfileData.fromJson(Map<String, dynamic> json) =>
@@ -53,6 +59,11 @@ class UserProfileData {
         updatedAt: json["updatedAt"] ?? 0,
         createdAt: json["createdAt"] ?? 0,
         userCoins: json["userCoins"] ?? 0,
+        timezone: json["timezone"] ?? "",
+        coinsConfig: json["coinsConfig"] != null
+            ? CoinsConfigModel.fromJson(
+                json["coinsConfig"] as Map<String, dynamic>)
+            : null,
       );
 
   Map<String, dynamic> toJson() => {
@@ -72,5 +83,7 @@ class UserProfileData {
         "updatedAt": updatedAt,
         "createdAt": createdAt,
         "userCoins": userCoins,
+        "timezone": timezone,
+        "coinsConfig": coinsConfig?.toJson(),
       };
 }
