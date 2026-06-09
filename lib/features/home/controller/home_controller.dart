@@ -116,8 +116,28 @@ class HomeController extends GetxController {
 
   /// Connect socket and register event listeners
   void connectSocket() {
+    // Resync REST state after every reconnect — socket events emitted while
+    // we were offline are lost, so without this the UI shows stale staff
+    // status / call history / coin balance after a network drop.
+    _socketService.onReconnected = _resyncStateAfterReconnect;
+
     _socketService.connect();
     // Remove old listeners before adding new ones to prevent duplicates
+    _socketService.off(SocketEvents.updateCallStatus);
+    _socketService.off(SocketEvents.endCall);
+    _listenSocketEvents();
+  }
+
+  /// Called by SocketService after a successful reconnect (not the initial
+  /// connect). Re-pulls every list that the socket would otherwise have kept
+  /// up to date in real time.
+  void _resyncStateAfterReconnect() {
+    log('[HomeController] Socket reconnected — resyncing state from REST');
+    _refreshUserProfile();
+    fetchStaffList();
+    fetchCallHistory();
+    // Re-register event listeners on the live socket so future deltas are
+    // delivered correctly after this reconnect.
     _socketService.off(SocketEvents.updateCallStatus);
     _socketService.off(SocketEvents.endCall);
     _listenSocketEvents();
@@ -159,7 +179,7 @@ class HomeController extends GetxController {
             staffList.refresh(); // single notification
           } else {
             staffList[index] = old.copyWith(status: newStatus);
-            staffList.refresh();
+            staffList.refresh(); 
           }
         }
       }
