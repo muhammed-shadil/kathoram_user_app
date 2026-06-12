@@ -321,16 +321,32 @@ class HomeController extends GetxController {
     }
   }
 
+  /// Monotonic token for call-history refreshes. fetchCallHistory() is fired
+  /// from several places that can overlap (call-end, tab switch, socket
+  /// reconnect, pull-to-refresh). Without sequencing, a slower/staler refresh
+  /// — e.g. the one fired the instant a call ends, before the backend has
+  /// persisted the new record — could land LAST and overwrite a fresher
+  /// response, so the just-finished call never shows up. Only the response
+  /// whose token still matches the latest refresh is allowed to win.
+  int _callHistoryRefreshSeq = 0;
+
   // ─── Fetch Call History (with pagination) ───
   Future<void> fetchCallHistory({bool loadMore = false}) async {
     if (loadMore && !callHistoryHasMorePages.value) return;
+
+    // Refreshes (not load-more) get a fresh token; load-more rides the current.
+    final int seq =
+        loadMore ? _callHistoryRefreshSeq : ++_callHistoryRefreshSeq;
 
     try {
       if (loadMore) {
         callHistoryCurrentPage.value++;
       } else {
         callHistoryCurrentPage.value = 1;
-        callHistoryList.clear();
+        // Note: intentionally NOT clearing here — keep showing the existing
+        // list until the new data arrives, then swap it in. Clearing first
+        // blanked the list to a shimmer on every refresh and made the race
+        // above visible as a flash of stale/empty content.
       }
 
       isCallHistoryLoading.value = true;
@@ -341,6 +357,9 @@ class HomeController extends GetxController {
         pageSize: 10,
       );
 
+      // A newer refresh started while we were awaiting — discard this stale one.
+      if (!loadMore && seq != _callHistoryRefreshSeq) return;
+
       if (response.success && response.data != null) {
         final historyResponse = CallHistoryListResponse.fromJson(
             response.data as Map<String, dynamic>);
@@ -348,7 +367,9 @@ class HomeController extends GetxController {
         if (loadMore) {
           callHistoryList.addAll(historyResponse.result);
         } else {
-          callHistoryList.value = historyResponse.result;
+          // assignAll is the canonical GetX way to replace list contents and
+          // guarantees a single reactive notification to the Obx.
+          callHistoryList.assignAll(historyResponse.result);
         }
 
         callHistoryTotalPages.value = historyResponse.pagination.totalPages;
@@ -364,7 +385,11 @@ class HomeController extends GetxController {
       callHistoryApiStatus.value = ApiCallStatus.error;
       Fluttertoast.showToast(msg: e.toString());
     } finally {
-      isCallHistoryLoading.value = false;
+      // Don't let a superseded refresh switch the spinner off — let the
+      // newest one own the loading flag until it completes.
+      if (loadMore || seq == _callHistoryRefreshSeq) {
+        isCallHistoryLoading.value = false;
+      }
     }
   }
 

@@ -33,7 +33,8 @@ class ApiConstants {
   static const String paymentVerify = 'api/v1/user/payment/verify';
 
   // Razorpay
-  static const String razorpayKey = 'rzp_test_6hIAG1K15Br3uN'; // TODO: Replace with your actual Razorpay key
+  static const String razorpayKey = 'rzp_test_SzAMW5gZm2Ey2U';
+  // static const String razorpayKey = 'rzp_live_SzAJyWdADtr20m';
 
   static String refreshToken = "";
 }

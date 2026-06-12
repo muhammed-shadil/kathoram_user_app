@@ -37,7 +37,9 @@ class _SplashScreenState extends State<SplashScreen> {
       final authController = Get.put(AuthController());
       final isValid = await authController.checkIsLogin();
       if (isValid) {
-        Get.put(HomeController());
+        if (!Get.isRegistered<HomeController>()) {
+          Get.put(HomeController(), permanent: true);
+        }
         Get.offAllNamed(RoutePath.bottomNav);
       } else {
         // Token expired or invalid → clear and go to login

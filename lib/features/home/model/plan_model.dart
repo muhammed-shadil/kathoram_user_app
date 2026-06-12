@@ -3,6 +3,9 @@ class PlanModel {
   final int noOfCoins;
   final int amount;
   final bool active;
+  /// Optional marketing label sent by the backend (e.g. "value pack").
+  /// Present only on some plans — null/empty means the plan has no badge.
+  final String? packName;
   final int updatedAt;
   final int createdAt;
 
@@ -11,15 +14,20 @@ class PlanModel {
     required this.noOfCoins,
     required this.amount,
     required this.active,
+    this.packName,
     required this.updatedAt,
     required this.createdAt,
   });
+
+  /// True when the backend tagged this plan with a pack name to highlight.
+  bool get hasPackName => packName != null && packName!.trim().isNotEmpty;
 
   factory PlanModel.fromJson(Map<String, dynamic> json) => PlanModel(
         id: json["_id"] ?? "",
         noOfCoins: json["noOfCoins"] ?? 0,
         amount: json["amount"] ?? 0,
         active: json["active"] ?? false,
+        packName: (json["packName"] as String?),
         updatedAt: json["updatedAt"] ?? 0,
         createdAt: json["createdAt"] ?? 0,
       );
@@ -29,6 +37,7 @@ class PlanModel {
         "noOfCoins": noOfCoins,
         "amount": amount,
         "active": active,
+        "packName": packName,
         "updatedAt": updatedAt,
         "createdAt": createdAt,
       };

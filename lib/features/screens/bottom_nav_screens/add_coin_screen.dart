@@ -41,11 +41,6 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
     super.dispose();
   }
 
-  /// Whether this index should show the "Value Pack" badge
-  bool _isValuePack(int index, int totalLength) {
-    return totalLength >= 2 && index >= totalLength - 2;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,10 +146,8 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                       }
 
                       final plan = plansList[index];
-                      final isValuePack =
-                          _isValuePack(index, plansList.length);
 
-                      return _buildPlanCard(plan, isValuePack);
+                      return _buildPlanCard(plan);
                     },
                   ),
                 ),
@@ -203,7 +196,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
     );
   }
 
-  Widget _buildPlanCard(PlanModel plan, bool isValuePack) {
+  Widget _buildPlanCard(PlanModel plan) {
     return GestureDetector(
       onTap: () async {
         final result = await Get.to(
@@ -272,8 +265,10 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
             ),
           ),
 
-          /// VALUE PACK BADGE (last 2 items permanently)
-          if (isValuePack)
+          /// PACK BADGE — shown only when the backend tagged this plan with a
+          /// packName (e.g. "value pack"). The label is the API value itself,
+          /// not a hardcoded string.
+          if (plan.hasPackName)
             Positioned(
               top: 4,
               left: 6,
@@ -284,9 +279,10 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text(
-                  'Value Pack',
-                  style: TextStyle(
+                child: Text(
+                  plan.packName!.trim().capitalizeFirst ??
+                      plan.packName!.trim(),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 10,
                     fontWeight: FontWeight.bold,

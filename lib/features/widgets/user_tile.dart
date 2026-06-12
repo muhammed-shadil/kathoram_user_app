@@ -210,7 +210,7 @@ class _UserTileState extends State<UserTile>
                 InkWell(
                   onTap: isLoading
                       ? null
-                      : () {
+                      : () async {
                           if (!staff.isOnline) {
                             Fluttertoast.showToast(
                               msg:
@@ -236,7 +236,7 @@ class _UserTileState extends State<UserTile>
                             return;
                           }
 
-                          ZegoCallService.instance.sendAudioCallToStaff(
+                          await ZegoCallService.instance.sendAudioCallToStaff(
                             staffUserID: staff.id,
                             staffUserName: staff.name,
                             callerName: currentUser.name,

@@ -9,8 +9,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../local_storage/shared_pref.dart';
 import '../../../routes/route_path.dart';
 import '../../../routes/custom_navigator.dart';
+import '../../../services/socket_service.dart';
 import '../../../services/zego_call_service.dart';
 import '../../../theme/app_colors.dart';
+import '../../home/controller/home_controller.dart';
 import '../../../utils/enum.dart';
 import '../model/guest_login_response_model.dart';
 import '../model/login_response_model.dart';
@@ -554,6 +556,15 @@ class AuthController extends GetxController {
     await ZegoCallService.instance.onUserLogout();
     await MySharedPref.clear();
     Get.offAllNamed(RoutePath.signIn);
+
+    // Tear down the session-scoped singletons AFTER navigating away (so no
+    // mounted Obx reads a deleted controller). HomeController is permanent now,
+    // so it won't auto-dispose — without this, a re-login would reuse the old
+    // user's controller and never re-run its onInit fetches. force:true is
+    // required to delete permanent instances. HomeController.onClose also
+    // disconnects the socket; we delete SocketService too so it's fully reset.
+    Get.delete<HomeController>(force: true);
+    Get.delete<SocketService>(force: true);
   }
 
   // ─── Show Confirmation Dialog ───

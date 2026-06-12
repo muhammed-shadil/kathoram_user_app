@@ -58,7 +58,14 @@ class RoutePages {
       page: () => BottomNavBar(),
       binding: BindingsBuilder(() {
         Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-        Get.lazyPut<HomeController>(() => HomeController(), fenix: true);
+        // HomeController must be ONE permanent instance for the whole session.
+        // It was fenix-lazyPut before, which let GetX dispose & recreate it: the
+        // screens captured one instance in initState while the call-end/socket
+        // flow's Get.find resolved to a freshly recreated one — so list updates
+        // (e.g. a new call-history entry) never reached the watching Obx.
+        if (!Get.isRegistered<HomeController>()) {
+          Get.put<HomeController>(HomeController(), permanent: true);
+        }
       }),
       transition: transition,
     ),
@@ -67,7 +74,14 @@ class RoutePages {
       page: () => AddCoinsScreen(),
       binding: BindingsBuilder(() {
         Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-        Get.lazyPut<HomeController>(() => HomeController(), fenix: true);
+        // HomeController must be ONE permanent instance for the whole session.
+        // It was fenix-lazyPut before, which let GetX dispose & recreate it: the
+        // screens captured one instance in initState while the call-end/socket
+        // flow's Get.find resolved to a freshly recreated one — so list updates
+        // (e.g. a new call-history entry) never reached the watching Obx.
+        if (!Get.isRegistered<HomeController>()) {
+          Get.put<HomeController>(HomeController(), permanent: true);
+        }
       }),
       transition: transition,
     ),
