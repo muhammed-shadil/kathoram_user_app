@@ -52,20 +52,21 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
     log('[BottomNav] Tab switched to $index — refreshing data');
 
+    // Always re-validate the session on every tab switch so an admin block
+    // (is-login → 423) takes effect promptly without needing an app restart.
+    auth?.checkIsLogin();
+
     switch (index) {
       case 0: // Home — staff list
         home?.fetchStaffList();
-        auth?.checkIsLogin();
         break;
       case 1: // Calls — call history
         home?.fetchCallHistory();
         break;
       case 2: // Add Coins — plans + user balance
         home?.fetchPlans();
-        auth?.checkIsLogin();
         break;
       case 3: // Profile — user data
-        auth?.checkIsLogin();
         break;
     }
   }

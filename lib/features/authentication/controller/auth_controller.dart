@@ -235,9 +235,21 @@ class AuthController extends GetxController {
     try {
       final response = await AuthRepository.isLogin();
 
+      // Admin blocked this account (HTTP/responseCode 423). Show a blocking
+      // dialog and log the user out — checkIsLogin runs on every tab switch,
+      // so the block takes effect within the session without an app restart.
+      if (response.responseCode == 423) {
+        _handleBlockedUser(response.message);
+        return false;
+      }
+
       if (response.success && response.data != null) {
         userProfile.value =
             UserProfileData.fromJson(response.data as Map<String, dynamic>);
+
+        // Validation succeeded → user is not blocked; reset the guard so a
+        // future block (even later in the same app run) can show the dialog.
+        _blockedDialogShown = false;
 
         // Initialize Zego call invitation service after profile is available
         _initZegoAfterLogin();
@@ -249,6 +261,39 @@ class AuthController extends GetxController {
     } catch (e) {
       return false;
     }
+  }
+
+  /// Guard so the block dialog is only shown once even though checkIsLogin is
+  /// called repeatedly (every tab switch, pull-to-refresh, etc.).
+  bool _blockedDialogShown = false;
+
+  /// Shows a non-dismissible "account blocked" dialog. The single OK button
+  /// clears the session and routes to the sign-in screen, exactly like logout.
+  void _handleBlockedUser(String message) {
+    if (_blockedDialogShown) return;
+    _blockedDialogShown = true;
+
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Account Blocked'),
+        content: Text(
+          message.trim().isNotEmpty
+              ? message
+              : 'Your account has been blocked. Please contact support.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              if (Get.isDialogOpen ?? false) Get.back();
+              await _clearSessionAndNavigate();
+              _blockedDialogShown = false;
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
   }
 
   /// Initialize Zego signaling with the user's backend ID.

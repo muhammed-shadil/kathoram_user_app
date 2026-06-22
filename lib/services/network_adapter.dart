@@ -157,6 +157,16 @@ class BaseClient {
               ? onError(Left(UndefinedException()))
               : _handleError(UndefinedException());
         case DioExceptionType.badResponse:
+          final badResponseData = error.response?.data;
+          // Account-blocked (HTTP 423) comes back as our normal API envelope.
+          // Surface it as a regular ApiBaseModel so auth flows can read
+          // success/responseCode/message and react (block dialog / error
+          // message) instead of it being thrown away as an exception.
+          if (error.response?.statusCode == 423 &&
+              badResponseData is Map<String, dynamic>) {
+            await onSuccess(ApiBaseModel.fromJson(badResponseData));
+            break;
+          }
           if (onError != null) {
             onError(
               Right(

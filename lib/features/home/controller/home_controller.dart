@@ -468,7 +468,7 @@ class HomeController extends GetxController {
   }
 
   // ─── Open Razorpay Checkout ───
-  void _openRazorpayCheckout(PaymentInitiateResponse paymentData) {
+  void _openRazorpayCheckout(PaymentInitiateResponse paymentData) { 
     var options = {
       'key': ApiConstants.razorpayKey,
       'amount': paymentData.amount,
