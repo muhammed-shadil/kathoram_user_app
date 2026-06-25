@@ -5,6 +5,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
+import '../../../local_storage/shared_pref.dart';
 import '../../../services/api_constants.dart';
 import '../../../services/socket_service.dart';
 import '../../../utils/enum.dart';
@@ -16,7 +17,7 @@ import '../model/staff_model.dart';
 import '../model/call_history_model.dart';
 import '../repository/home_repository.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController with WidgetsBindingObserver {
   // ─── Plans ───
   var plans = <PlanModel>[].obs;
   var isPlansLoading = false.obs;
@@ -82,6 +83,12 @@ class HomeController extends GetxController {
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
+    // Observe app lifecycle so we can reconcile a payment whose verify callback
+    // never ran because the app was killed while on a UPI app (GPay/PhonePe).
+    WidgetsBinding.instance.addObserver(this);
+    // Also reconcile on a fresh launch (app process was killed and relaunched).
+    reconcilePendingPayment();
+
     // Get or create socket service (permanent so it survives controller re-creation)
     _socketService = Get.put(SocketService(), permanent: true);
 
@@ -105,9 +112,56 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     _razorpay.clear();
     disconnectSocket();
     super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // When the user returns from a UPI app (or any backgrounded state), make
+    // sure a completed-but-unverified payment gets credited.
+    if (state == AppLifecycleState.resumed) {
+      reconcilePendingPayment();
+    }
+  }
+
+  /// Reconcile a pending payment against the backend's authoritative status.
+  ///
+  /// The client-side verify callback ([_handlePaymentSuccess]) only runs if the
+  /// app survives the trip to the UPI app. On low-RAM devices Android often
+  /// kills the app, so we persist the order id at checkout time and re-check it
+  /// here. The backend status is kept correct by the Razorpay webhook, so even
+  /// if the verify call never happened the coins are credited server-side and
+  /// this just refreshes the local balance.
+  Future<void> reconcilePendingPayment() async {
+    final pendingOrderId = MySharedPref.getPendingPaymentOrderId();
+    if (pendingOrderId == null || pendingOrderId.isEmpty) return;
+
+    try {
+      final response =
+          await HomeRepository.paymentStatus(razorpayOrderId: pendingOrderId);
+
+      if (!response.success || response.data == null) return;
+
+      final data = response.data as Map<String, dynamic>;
+      final status = (data["status"] ?? "").toString().toLowerCase();
+
+      if (status == "paid" || status == "credited" || status == "success") {
+        // Settled successfully — stop tracking it and refresh the balance.
+        await MySharedPref.clearPendingPaymentOrderId();
+        await _refreshUserProfile();
+        Fluttertoast.showToast(msg: "Coins added to your wallet");
+      } else if (status == "failed") {
+        // Terminal failure — stop tracking it so we don't keep polling.
+        await MySharedPref.clearPendingPaymentOrderId();
+      }
+      // Otherwise still 'created'/pending — keep it and retry on next resume.
+    } catch (_) {
+      // Network/transient error — keep the pending id and retry next time.
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -456,6 +510,10 @@ class HomeController extends GetxController {
         final paymentData = PaymentInitiateResponse.fromJson(
             response.data as Map<String, dynamic>);
 
+        // Persist the order id BEFORE opening checkout, so that if the app is
+        // killed while on a UPI app we can still reconcile it on relaunch.
+        await MySharedPref.setPendingPaymentOrderId(paymentData.orderId);
+
         _openRazorpayCheckout(paymentData);
       } else {
         isPaymentLoading.value = false;
@@ -503,6 +561,8 @@ class HomeController extends GetxController {
       );
 
       if (verifyResponse.success) {
+        // Fast path succeeded — reconciliation no longer needs to handle it.
+        await MySharedPref.clearPendingPaymentOrderId();
         Fluttertoast.showToast(msg: "Payment successful!");
 
         // Refresh user profile to update coins BEFORE calling success callback

@@ -165,6 +165,38 @@ class HomeRepository {
     return response;
   }
 
+  /// Payment Status API call - POST
+  /// Used to reconcile a payment whose client-side verify callback never ran
+  /// (e.g. the app was killed while switching to a UPI app like GPay/PhonePe).
+  /// The backend returns the authoritative status from its own DB, which is
+  /// kept up to date by the Razorpay webhook.
+  static Future<ApiBaseModel> paymentStatus({
+    required String razorpayOrderId,
+  }) async {
+    late ApiBaseModel response;
+    await BaseClient.shared.safeApiCall(
+      ApiConstants.paymentStatus,
+      RequestType.post,
+      data: {
+        "razorpay_order_id": razorpayOrderId,
+      },
+      onSuccess: (s) {
+        response = s;
+      },
+      onError: (s) {
+        s.fold(
+          (l) {
+            throw l.message;
+          },
+          (l) {
+            throw l;
+          },
+        );
+      },
+    );
+    return response;
+  }
+
   /// Initiate Call API - POST
   static Future<ApiBaseModel> initiateCall({
     required String receiverId,

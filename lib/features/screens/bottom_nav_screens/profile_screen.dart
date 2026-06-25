@@ -9,8 +9,8 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   // ─── URLs ───
-  static const String _privacyPolicyUrl = 'https://kathoram.com/privacy-policy';
-  static const String _termsUrl = 'https://kathoram.com/terms-and-conditions';
+  static const String _privacyPolicyUrl = 'https://coresports.co.in/privacy-policy';
+  static const String _termsUrl = 'https://coresports.co.in/terms-conditions';
   static const String _supportNumber = '919876543210'; // WhatsApp number with country code
 
   Future<void> _launchUrl(String url) async {

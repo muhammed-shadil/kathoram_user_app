@@ -19,6 +19,7 @@ class MySharedPref {
   static const String _mobileNumber = 'mobileNumber';
   static const String _temporaryToken = 'temporaryToken';
   static const String _onboardingShown = 'onboarding_shown';
+  static const String _pendingPaymentOrderId = 'pending_payment_order_id';
 
   /// init get storage services
   static Future<void> init() async {
@@ -104,6 +105,19 @@ class MySharedPref {
   /// get onboarding shown status
   static bool getOnboardingShown() =>
       _sharedPreferences.getBool(_onboardingShown) ?? false;
+
+  /// save the order id of an in-progress Razorpay payment so it can be
+  /// reconciled if the app is killed (e.g. when switching to a UPI app)
+  static Future<void> setPendingPaymentOrderId(String orderId) =>
+      _sharedPreferences.setString(_pendingPaymentOrderId, orderId);
+
+  /// get the order id of an in-progress payment, if any
+  static String? getPendingPaymentOrderId() =>
+      _sharedPreferences.getString(_pendingPaymentOrderId);
+
+  /// clear the pending payment order id once it has been reconciled
+  static Future<void> clearPendingPaymentOrderId() =>
+      _sharedPreferences.remove(_pendingPaymentOrderId);
 
   /// clear all data from shared pref (preserves onboarding flag)
   static Future<void> clear() async {

@@ -1,5 +1,7 @@
 class ApiConstants {
   static const baseUrl = 'http://13.206.185.19/';
+  // static const baseUrl = 'http://localhost:4000/';
+
 
   // Auth endpoints
   static const String login = 'api/v1/user/login';
@@ -31,6 +33,7 @@ class ApiConstants {
   // Payment endpoints
   static const String paymentInitiate = 'api/v1/user/payment/initiate';
   static const String paymentVerify = 'api/v1/user/payment/verify';
+  static const String paymentStatus = 'api/v1/user/payment/status';
 
   // Razorpay
   static const String razorpayKey = 'rzp_test_SzAMW5gZm2Ey2U';
