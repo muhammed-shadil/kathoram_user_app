@@ -12,6 +12,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:kathoram_user_app/services/firebase_fcm.dart';
 import 'package:kathoram_user_app/services/zego_call_service.dart';
 import 'package:kathoram_user_app/utils/navigator_key_utils.dart';
+import 'package:kathoram_user_app/utils/screen_security.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 
 void main() async {
@@ -31,6 +32,11 @@ void main() async {
   await FirebaseAndNotification.initNotification();
 
   MySharedPref.init();
+
+  // Block screenshots & screen recording across the entire app (reinforces the
+  // native Android FLAG_SECURE and enables the iOS secure layer + app-switcher
+  // blur). See android MainActivity.kt for the native Android counterpart.
+  await ScreenSecurity.enable();
 
   // CRITICAL: Zego system calling UI setup MUST be before runApp()
   await ZegoCallService.instance.initialSetUp(NavigatorKeyHelper.navigatorKey);
