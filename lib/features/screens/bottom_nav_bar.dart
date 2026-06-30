@@ -8,6 +8,7 @@ import 'package:kathoram_user_app/features/screens/bottom_nav_screens/add_coin_s
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/call_historyscreen.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/chat_home_screen.dart';
 import 'package:kathoram_user_app/features/screens/bottom_nav_screens/profile_screen.dart';
+import 'package:kathoram_user_app/features/home/version_check/version_check.dart';
 
 class BottomNavBar extends StatefulWidget {
   final int initialIndex;
@@ -31,6 +32,14 @@ class _BottomNavBarState extends State<BottomNavBar> {
   void initState() {
     _selectedIndex = widget.initialIndex;
     super.initState();
+
+    // Check for app updates / maintenance break once the home screen is fully
+    // mounted. Running it here (after the post-frame) — instead of on splash —
+    // ensures the dialog attaches to a stable route and isn't torn down by the
+    // splash → home navigation. Guarded internally to run only once per launch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      VersionControlApi.instance.checkVersionStatus();
+    });
   }
 
   /// Refresh the data for the tab the user just switched to.

@@ -1,7 +1,11 @@
 class ApiConstants {
-  static const baseUrl = 'http://13.206.185.19/';
+  // static const baseUrl = 'http://13.206.185.19/';
   // static const baseUrl = 'http://localhost:4000/';
+  static const String baseUrl = 'https://admin.kathoram.coresports.co.in/';
 
+
+  // App version / maintenance
+  static const String currentVersion = 'api/v1/user/current/version';
 
   // Auth endpoints
   static const String login = 'api/v1/user/login';
@@ -28,16 +32,17 @@ class ApiConstants {
   static const String endCall = 'api/v1/user/end-call';
 
   // Socket
-  static const String socketUrl = 'http://13.206.185.19';
+  static const String socketUrl = 'https://admin.kathoram.coresports.co.in';
 
   // Payment endpoints
   static const String paymentInitiate = 'api/v1/user/payment/initiate';
   static const String paymentVerify = 'api/v1/user/payment/verify';
   static const String paymentStatus = 'api/v1/user/payment/status';
+  static const String razorpayKeyApi = 'api/v1/user/payment/razorpay-key';
 
-  // Razorpay
-  static const String razorpayKey = 'rzp_test_SzAMW5gZm2Ey2U';
-  // static const String razorpayKey = 'rzp_live_SzAJyWdADtr20m';
+  // Razorpay (fallback key, used only if the razorpay-key API fails)
+  // static const String razorpayKey = 'rzp_test_SzAMW5gZm2Ey2U';
+  static const String razorpayKey = 'rzp_live_SzAJyWdADtr20m';
 
   static String refreshToken = "";
 }

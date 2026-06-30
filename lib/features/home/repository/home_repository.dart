@@ -165,6 +165,31 @@ class HomeRepository {
     return response;
   }
 
+  /// Razorpay Key API call - GET
+  /// Fetches the active Razorpay key (test/live) from the backend so the key
+  /// can be rotated server-side without shipping a new app build.
+  static Future<ApiBaseModel> razorpayKey() async {
+    late ApiBaseModel response;
+    await BaseClient.shared.safeApiCall(
+      ApiConstants.razorpayKeyApi,
+      RequestType.get,
+      onSuccess: (s) {
+        response = s;
+      },
+      onError: (s) {
+        s.fold(
+          (l) {
+            throw l.message;
+          },
+          (l) {
+            throw l;
+          },
+        );
+      },
+    );
+    return response;
+  }
+
   /// Payment Status API call - POST
   /// Used to reconcile a payment whose client-side verify callback never ran
   /// (e.g. the app was killed while switching to a UPI app like GPay/PhonePe).

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../utils/support_helper.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_outline_button.dart';
 import '../../widgets/cutom_textfield.dart';
@@ -21,6 +22,13 @@ class SignInScreen extends StatelessWidget {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
+        floatingActionButton: const SupportFab(
+          message: 'Hi, I need help logging in to the Kathoram app',
+          iconColor: Colors.blue,
+          backgroundColor: Colors.white,
+          size: 25,
+          mini: true,
+        ),
         body: Column(
           children: [
             Stack(
@@ -89,7 +97,8 @@ class SignInScreen extends StatelessWidget {
                         () => authController.isGoogleLoading.value
                             ? const SizedBox(
                                 height: 50,
-                                child: Center(child: CircularProgressIndicator()),
+                                child:
+                                    Center(child: CircularProgressIndicator()),
                               )
                             : GestureDetector(
                                 onTap: () {

@@ -61,7 +61,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'Kathoram App',
+      title: 'Kathoram',
       debugShowCheckedModeBanner: false,
       navigatorKey: NavigatorKeyHelper.navigatorKey,
       initialRoute: RoutePath.splash,

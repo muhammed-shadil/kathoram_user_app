@@ -48,6 +48,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   String? _currentPlanId;
   VoidCallback? _onPaymentSuccess;
 
+  // Razorpay key fetched from the backend (cached). Lets the key be rotated
+  // server-side without a new app build. Falls back to ApiConstants.razorpayKey.
+  String? _razorpayKey;
+
   // ─── Active Call State ───
   var isCallLoading = false.obs;
   var activeCallId = RxnString(); // backend call _id from initiate-call
@@ -88,6 +92,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // Also reconcile on a fresh launch (app process was killed and relaunched).
     reconcilePendingPayment();
+
+    // Warm the Razorpay key cache so checkout opens without an extra round-trip.
+    _fetchRazorpayKey();
 
     // Get or create socket service (permanent so it survives controller re-creation)
     _socketService = Get.put(SocketService(), permanent: true);
@@ -514,7 +521,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         // killed while on a UPI app we can still reconcile it on relaunch.
         await MySharedPref.setPendingPaymentOrderId(paymentData.orderId);
 
-        _openRazorpayCheckout(paymentData);
+        await _openRazorpayCheckout(paymentData);
       } else {
         isPaymentLoading.value = false;
         Fluttertoast.showToast(msg: response.message);
@@ -525,10 +532,33 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  // ─── Fetch Razorpay Key ───
+  /// Fetches the active Razorpay key from the backend and caches it. Returns
+  /// the cached key on subsequent calls, and falls back to the bundled key in
+  /// ApiConstants if the API is unavailable so checkout never breaks.
+  Future<String> _fetchRazorpayKey() async {
+    if (_razorpayKey != null && _razorpayKey!.isNotEmpty) return _razorpayKey!;
+    try {
+      final response = await HomeRepository.razorpayKey();
+      if (response.success && response.data != null) {
+        final data = response.data as Map<String, dynamic>;
+        final key = (data['razorpayKey'] ?? '').toString();
+        if (key.isNotEmpty) {
+          _razorpayKey = key;
+          return key;
+        }
+      }
+    } catch (_) {
+      // Ignore and fall back to the bundled key below.
+    }
+    return ApiConstants.razorpayKey;
+  }
+
   // ─── Open Razorpay Checkout ───
-  void _openRazorpayCheckout(PaymentInitiateResponse paymentData) { 
+  Future<void> _openRazorpayCheckout(PaymentInitiateResponse paymentData) async {
+    final razorpayKey = await _fetchRazorpayKey();
     var options = {
-      'key': ApiConstants.razorpayKey,
+      'key': razorpayKey,
       'amount': paymentData.amount,
       'currency': paymentData.currency,
       'name': 'Kathoram',

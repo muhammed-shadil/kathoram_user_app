@@ -27,6 +27,7 @@ class AuthController extends GetxController {
 
   // ─── Signup Fields ───
   final signupNameController = TextEditingController();
+  final signupEmailController = TextEditingController();
   final signupMobileController = TextEditingController();
   final signupPasswordController = TextEditingController();
   final signupConfirmPasswordController = TextEditingController();
@@ -172,11 +173,25 @@ class AuthController extends GetxController {
 
   // ─── Signup ───
   Future<void> signup() async {
+    final email = signupEmailController.text.trim();
+    final mobile = signupMobileController.text.trim();
+
     if (signupNameController.text.trim().isEmpty ||
-        signupMobileController.text.trim().isEmpty ||
+        email.isEmpty ||
+        mobile.isEmpty ||
         signupPasswordController.text.trim().isEmpty ||
         signupConfirmPasswordController.text.trim().isEmpty) {
       Fluttertoast.showToast(msg: "Please fill all fields");
+      return;
+    }
+
+    if (!GetUtils.isEmail(email)) {
+      Fluttertoast.showToast(msg: "Please enter a valid email");
+      return;
+    }
+
+    if (mobile.length < 10) {
+      Fluttertoast.showToast(msg: "Please enter a valid mobile number");
       return;
     }
 
@@ -197,7 +212,8 @@ class AuthController extends GetxController {
 
       final payload = {
         "name": signupNameController.text.trim(),
-        "mobileNumber": signupMobileController.text.trim(),
+        "email": email,
+        "mobileNumber": mobile,
         "password": signupPasswordController.text.trim(),
         "isTermsAgreed": isTermsAgreed.value,
       };
@@ -726,6 +742,7 @@ class AuthController extends GetxController {
   // ─── Clear signup fields ───
   void clearSignupFields() {
     signupNameController.clear();
+    signupEmailController.clear();
     signupMobileController.clear();
     signupPasswordController.clear();
     signupConfirmPasswordController.clear();

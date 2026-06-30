@@ -6,6 +6,7 @@ import 'package:kathoram_user_app/features/screens/bottom_nav_bar.dart';
 import 'package:kathoram_user_app/features/widgets/user_tile.dart';
 import 'package:kathoram_user_app/features/widgets/shimmer_loaders.dart';
 import 'package:kathoram_user_app/features/authentication/controller/auth_controller.dart';
+import 'package:kathoram_user_app/utils/support_helper.dart';
 
 class ChatHomeScreen extends StatefulWidget {
   const ChatHomeScreen({super.key});
@@ -65,6 +66,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
+        floatingActionButton: const SupportFab(),
         extendBodyBehindAppBar: true,
         backgroundColor: const Color(0xFFF2F2F2),
         body: Column(
@@ -116,14 +118,16 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                     right: 20,
                     child: Obx(() {
                       final authController = Get.find<AuthController>();
-                      final coins = authController.userProfile.value?.userCoins ?? 0;
+                      final coins =
+                          authController.userProfile.value?.userCoins ?? 0;
                       return Row(
                         children: [
                           Image.asset("assets/images/coin.png", width: 26),
                           const SizedBox(width: 2),
                           Text(
                             "$coins",
-                            style: const TextStyle(color: Colors.white, fontSize: 20),
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 20),
                           ),
                         ],
                       );
@@ -181,7 +185,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                           Center(
                             child: Text(
                               'No users available',
-                              style: TextStyle(fontSize: 16, color: Colors.grey),
+                              style:
+                                  TextStyle(fontSize: 16, color: Colors.grey),
                             ),
                           ),
                         ],

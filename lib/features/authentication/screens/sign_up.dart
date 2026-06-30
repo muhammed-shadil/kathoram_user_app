@@ -114,6 +114,12 @@ class SignUpScreen extends StatelessWidget {
                         controller: authController.signupNameController,
                       ),
                       CustomTextField(
+                        labelText: "Email",
+                        hint: "Enter your email",
+                        controller: authController.signupEmailController,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      CustomTextField(
                         labelText: "Phone",
                         hint: "+91 0000000000",
                         controller: authController.signupMobileController,

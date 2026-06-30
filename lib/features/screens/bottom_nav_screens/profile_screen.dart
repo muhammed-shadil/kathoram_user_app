@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../routes/route_path.dart';
+import '../../../utils/support_helper.dart';
 import '../../authentication/controller/auth_controller.dart';
 import '../../widgets/shimmer_loaders.dart';
 
@@ -9,19 +11,12 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   // ─── URLs ───
-  static const String _privacyPolicyUrl = 'https://coresports.co.in/privacy-policy';
+  static const String _privacyPolicyUrl =
+      'https://coresports.co.in/privacy-policy';
   static const String _termsUrl = 'https://coresports.co.in/terms-conditions';
-  static const String _supportNumber = '919876543210'; // WhatsApp number with country code
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  Future<void> _openWhatsApp() async {
-    final uri = Uri.parse('https://wa.me/$_supportNumber?text=Hi, I need help with Kathoram app');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -116,8 +111,7 @@ class ProfileScreen extends StatelessWidget {
                             bottom: 0,
                             right: 0,
                             child: GestureDetector(
-                              onTap: () =>
-                                  Get.toNamed(RoutePath.editProfile),
+                              onTap: () => Get.toNamed(RoutePath.editProfile),
                               child: Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
@@ -160,24 +154,33 @@ class ProfileScreen extends StatelessWidget {
 
                   /// GUEST TAG ID — shown only for guest accounts so the user
                   /// can quote it to support when their account has no email.
-                  if (profile.userType.toLowerCase() == "guest" &&
-                      profile.tagId.isNotEmpty) ...[
+                  if (profile.tagId.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.blue.shade200),
-                        ),
-                        child: Text(
-                          "Guest ID: ${profile.tagId}",
-                          style: TextStyle(
-                            color: Colors.blue.shade700,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      child: Tooltip(
+                        message: "Tap to copy",
+                        child: InkWell(
+                          onTap: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: profile.tagId),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Text(
+                              "Guest ID: ${profile.tagId}",
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -190,11 +193,12 @@ class ProfileScreen extends StatelessWidget {
                   menuButton(Icons.privacy_tip, "Privacy Policy", onTap: () {
                     _launchUrl(_privacyPolicyUrl);
                   }),
-                  menuButton(Icons.description, "Terms and Conditions", onTap: () {
+                  menuButton(Icons.description, "Terms and Conditions",
+                      onTap: () {
                     _launchUrl(_termsUrl);
                   }),
                   menuButton(Icons.support_agent, "Support", onTap: () {
-                    _openWhatsApp();
+                    SupportHelper.openWhatsApp();
                   }),
 
                   const SizedBox(height: 10),
