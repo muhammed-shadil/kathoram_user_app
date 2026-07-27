@@ -43,6 +43,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "882594698231-0oa3lhh8jo8cbu90rj3q4tkj1q1lhesd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kathoram.user_app",
+            "certificate_hash": "df46a584b7553d142e4b359ee4c2ac51afb7c3b7"
+          }
+        },
+        {
+          "client_id": "882594698231-hrcsre3s7jnj643ladn47too7tl1das5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kathoram.user_app",
+            "certificate_hash": "bbe8e5036ce88edaa3de45252626ca1eaeee1c97"
+          }
+        },
+        {
           "client_id": "882594698231-jd5fsvcqi4h2hld7cbf7l94b5hsd321u.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

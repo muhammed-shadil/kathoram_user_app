@@ -34,7 +34,14 @@ class _SplashScreenState extends State<SplashScreen> {
 
     // Returning user with saved token → validate session with is-login API
     if (MySharedPref.getLoggedInStatus()) {
-      final authController = Get.put(AuthController());
+      // permanent: true — a plain Get.put here is scoped to the splash route, so
+      // GetX disposed it on the offAllNamed below and every later Get.find built
+      // a fresh controller. Screens holding the original instance then watched a
+      // dead `userProfile` and never saw coin updates.
+      if (!Get.isRegistered<AuthController>()) {
+        Get.put<AuthController>(AuthController(), permanent: true);
+      }
+      final authController = Get.find<AuthController>();
       final isValid = await authController.checkIsLogin();
       if (isValid) {
         if (!Get.isRegistered<HomeController>()) {

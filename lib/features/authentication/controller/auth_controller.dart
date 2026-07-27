@@ -616,6 +616,12 @@ class AuthController extends GetxController {
     // Disconnect from Zego signaling before clearing session
     await ZegoCallService.instance.onUserLogout();
     await MySharedPref.clear();
+
+    // This controller is permanent, so it survives logout — drop the profile
+    // explicitly or the next user briefly sees the previous user's coins and
+    // name before their own is-login lands.
+    userProfile.value = null;
+
     Get.offAllNamed(RoutePath.signIn);
 
     // Tear down the session-scoped singletons AFTER navigating away (so no

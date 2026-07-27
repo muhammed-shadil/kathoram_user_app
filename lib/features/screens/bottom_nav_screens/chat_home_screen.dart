@@ -55,6 +55,16 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
     super.dispose();
   }
 
+  /// Pull-to-refresh: re-pull the staff list AND the user profile, so the coin
+  /// balance in the header updates too (it lives on AuthController, which
+  /// fetchStaffList never touches).
+  Future<void> _refresh() async {
+    await Future.wait([
+      homeController.fetchStaffList(),
+      Get.find<AuthController>().checkIsLogin(),
+    ]);
+  }
+
   int selectedIndex = 0;
 
   @override
@@ -178,8 +188,11 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
 
                   if (staff.isEmpty) {
                     return RefreshIndicator(
-                      onRefresh: () => homeController.fetchStaffList(),
+                      onRefresh: _refresh,
                       child: ListView(
+                        // Short placeholder content isn't overscrollable under
+                        // the default physics, which swallows the pull gesture.
+                        physics: const AlwaysScrollableScrollPhysics(),
                         children: const [
                           SizedBox(height: 200),
                           Center(
@@ -195,9 +208,10 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> {
                   }
 
                   return RefreshIndicator(
-                    onRefresh: () => homeController.fetchStaffList(),
+                    onRefresh: _refresh,
                     child: ListView.builder(
                       controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.only(top: 12),
                       itemCount: staff.length + (isLoading ? 1 : 0),
                       itemBuilder: (context, index) {

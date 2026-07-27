@@ -18,6 +18,37 @@ import 'package:kathoram_user_app/routes/route_path.dart';
 
 class RoutePages {
   static const transition = Transition.fadeIn;
+
+  /// AuthController must be ONE permanent instance for the whole session —
+  /// the same rule (and the same past bug) as HomeController below.
+  ///
+  /// It used to be a fenix lazyPut on every route binding. Popping any of those
+  /// routes (edit-profile, OTP, …) let GetX dispose the instance, and the next
+  /// Get.find silently built a fresh one. Screens that captured the controller
+  /// once in initState — AddCoinsScreen does, in a `late final` — kept pointing
+  /// at the dead instance: is-login updated `userProfile` on the NEW controller
+  /// while the app bar's Obx was still watching the OLD one, so the API fired on
+  /// every tab switch but the coin balance never moved.
+  static void _bindAuth() {
+    if (!Get.isRegistered<AuthController>()) {
+      Get.put<AuthController>(AuthController(), permanent: true);
+    }
+  }
+
+  /// AuthController + HomeController, both permanent. Used by the session
+  /// routes (bottom nav and add-coins) that need the full set.
+  static void _bindSession() {
+    _bindAuth();
+    // HomeController must be ONE permanent instance for the whole session.
+    // It was fenix-lazyPut before, which let GetX dispose & recreate it: the
+    // screens captured one instance in initState while the call-end/socket
+    // flow's Get.find resolved to a freshly recreated one — so list updates
+    // (e.g. a new call-history entry) never reached the watching Obx.
+    if (!Get.isRegistered<HomeController>()) {
+      Get.put<HomeController>(HomeController(), permanent: true);
+    }
+  }
+
   static final routes = [
     GetPage(
       name: RoutePath.splash,
@@ -32,57 +63,31 @@ class RoutePages {
     GetPage(
       name: RoutePath.signIn,
       page: () => SignInScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.signUp,
       page: () => SignUpScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.guestSignup,
       page: () => GuestSignUpScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.bottomNav,
       page: () => BottomNavBar(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-        // HomeController must be ONE permanent instance for the whole session.
-        // It was fenix-lazyPut before, which let GetX dispose & recreate it: the
-        // screens captured one instance in initState while the call-end/socket
-        // flow's Get.find resolved to a freshly recreated one — so list updates
-        // (e.g. a new call-history entry) never reached the watching Obx.
-        if (!Get.isRegistered<HomeController>()) {
-          Get.put<HomeController>(HomeController(), permanent: true);
-        }
-      }),
+      binding: BindingsBuilder(_bindSession),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.addCoins,
       page: () => AddCoinsScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-        // HomeController must be ONE permanent instance for the whole session.
-        // It was fenix-lazyPut before, which let GetX dispose & recreate it: the
-        // screens captured one instance in initState while the call-end/socket
-        // flow's Get.find resolved to a freshly recreated one — so list updates
-        // (e.g. a new call-history entry) never reached the watching Obx.
-        if (!Get.isRegistered<HomeController>()) {
-          Get.put<HomeController>(HomeController(), permanent: true);
-        }
-      }),
+      binding: BindingsBuilder(_bindSession),
       transition: transition,
     ),
     GetPage(
@@ -93,9 +98,7 @@ class RoutePages {
     GetPage(
       name: RoutePath.forgotPassword,
       page: () => ForgotPasswordScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
@@ -113,25 +116,19 @@ class RoutePages {
     GetPage(
       name: RoutePath.otp,
       page: () => OTPScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.changePassword,
       page: () => ChangePasswordScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
     GetPage(
       name: RoutePath.editProfile,
       page: () => EditProfileScreen(),
-      binding: BindingsBuilder(() {
-        Get.lazyPut<AuthController>(() => AuthController(), fenix: true);
-      }),
+      binding: BindingsBuilder(_bindAuth),
       transition: transition,
     ),
   ];

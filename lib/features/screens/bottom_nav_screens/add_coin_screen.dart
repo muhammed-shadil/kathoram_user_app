@@ -41,6 +41,15 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
     super.dispose();
   }
 
+  /// Pull-to-refresh: re-pull the plans AND the coin balance shown in the app
+  /// bar. Run together so the indicator stays up until both have landed.
+  Future<void> _refresh() async {
+    await Future.wait([
+      homeController.fetchPlans(),
+      authController.checkIsLogin(),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -67,8 +76,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Obx(() {
-              final coins =
-                  authController.userProfile.value?.userCoins ?? 0;
+              final coins = authController.userProfile.value?.userCoins ?? 0;
               return Row(
                 children: [
                   Image.asset('assets/images/coin.png', width: 24),
@@ -101,8 +109,12 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
 
             if (plansList.isEmpty) {
               return RefreshIndicator(
-                onRefresh: () => homeController.fetchPlans(),
+                onRefresh: _refresh,
                 child: ListView(
+                  // Without this the short placeholder content isn't
+                  // overscrollable, so the pull gesture never reaches the
+                  // RefreshIndicator.
+                  physics: const AlwaysScrollableScrollPhysics(),
                   children: const [
                     SizedBox(height: 200),
                     Center(
@@ -117,15 +129,16 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
             }
 
             return RefreshIndicator(
-              onRefresh: () async {
-                await homeController.fetchPlans();
-                await authController.checkIsLogin();
-              },
+              onRefresh: _refresh,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: GridView.builder(
                     controller: _scrollController,
+                    // A handful of plans doesn't fill the viewport, and the
+                    // default physics refuse to scroll non-overflowing content
+                    // — which also swallows the pull-to-refresh gesture.
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     itemCount: plansList.length + (isLoading ? 1 : 0),
                     gridDelegate:
@@ -247,8 +260,8 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
                 ),
                 const SizedBox(height: 5),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
@@ -273,8 +286,7 @@ class _AddCoinsScreenState extends State<AddCoinsScreen> {
               top: 4,
               left: 6,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 4, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(6),

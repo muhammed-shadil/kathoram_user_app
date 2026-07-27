@@ -344,7 +344,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         staffCurrentPage.value++;
       } else {
         staffCurrentPage.value = 1;
-        staffList.clear();
+        // Note: intentionally NOT clearing here — see fetchCallHistory. Emptying
+        // the list mid-refresh flips the screen to its shimmer branch, which
+        // unmounts the RefreshIndicator and makes pull-to-refresh look broken.
       }
 
       isStaffLoading.value = true;
@@ -362,7 +364,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         if (loadMore) {
           staffList.addAll(staffResponse.result);
         } else {
-          staffList.value = staffResponse.result;
+          staffList.assignAll(staffResponse.result);
         }
 
         staffTotalPages.value = staffResponse.pagination.totalPages;
@@ -463,7 +465,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         currentPage.value++;
       } else {
         currentPage.value = 1;
-        plans.clear();
+        // Note: intentionally NOT clearing here — see fetchCallHistory. Emptying
+        // the list mid-refresh flips the screen to its shimmer branch, which
+        // unmounts the RefreshIndicator and makes pull-to-refresh look broken.
       }
 
       isPlansLoading.value = true;
@@ -481,7 +485,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         if (loadMore) {
           plans.addAll(planListResponse.result);
         } else {
-          plans.value = planListResponse.result;
+          plans.assignAll(planListResponse.result);
         }
 
         totalPages.value = planListResponse.pagination.totalPages;
