@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:developer';
+import 'dart:io' show Platform;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
+import '../features/authentication/controller/auth_controller.dart';
 import '../features/home/controller/home_controller.dart';
 
 /// Singleton service managing ZegoCloud call invitations.
@@ -15,7 +20,32 @@ import '../features/home/controller/home_controller.dart';
 ///  2. Call [onUserLogin] AFTER successful backend login (user profile available).
 ///  3. Call [sendAudioCallToStaff] to initiate an outgoing call invitation.
 ///  4. Call [onUserLogout] on logout.
-class ZegoCallService {
+///
+/// ## Why this class tracks the signaling connection
+///
+/// [ZegoUIKitPrebuiltCallInvitationService.init] logs the user into ZIM
+/// (Zego's signaling layer) over the network. A plain "did we call init()"
+/// boolean says nothing about whether that socket is still alive: the OS kills
+/// it after a long background, a Wi-Fi↔mobile switch drops it, and ZIM kicks
+/// this device if the same userID logs in elsewhere. When that happened the
+/// old flag stayed `true`, [onUserLogin] skipped the re-init, and every
+/// [sendAudioCallToStaff] failed with a generic toast until the user killed
+/// the app.
+///
+/// So the real state is now read from two authoritative sources, never from a
+/// flag alone:
+///  * `ZegoUIKitPrebuiltCallInvitationService().isInit` — SDK-side init state.
+///  * `ZegoUIKit().getSignalingPlugin().getConnectionState()` — live ZIM socket.
+///
+/// [_isInitialized] survives only as a fast "our init attempt succeeded" hint;
+/// the connection-state listener clears it the moment ZIM disconnects so the
+/// next login/resume is allowed through to a real re-init.
+///
+/// Mirrors the recovery pattern `SocketService` already uses (its own
+/// lifecycle observer + reconnect-on-resume) rather than piggybacking on
+/// `HomeController`'s payment-reconciliation observer, so call recovery keeps
+/// working even when that controller is disposed.
+class ZegoCallService with WidgetsBindingObserver {
   ZegoCallService._();
   static final ZegoCallService instance = ZegoCallService._();
 
@@ -28,7 +58,37 @@ class ZegoCallService {
   /// MUST match exactly in both User & Staff apps AND Zego Console.
   static const String _resourceID = 'zego_audio_call';
 
+  /// How long [_ensureSignalingReady] waits for ZIM to reach `connected`
+  /// before giving up and letting the caller show the failure toast.
+  static const Duration _connectionWaitTimeout = Duration(seconds: 8);
+
+  /// Our own "init() completed without throwing" hint. NOT the source of
+  /// truth — see the class doc. Cleared by [_onConnectionStateChanged] on
+  /// disconnect so a re-init can happen.
   bool _isInitialized = false;
+
+  /// Guards against two concurrent init attempts (e.g. a resume and a tab
+  /// switch firing at the same moment), which would race inside the SDK.
+  bool _loginInFlight = false;
+
+  /// Credentials of the logged-in user, cached on [onUserLogin]. Lets the
+  /// resume/recovery path re-init without depending on `AuthController` still
+  /// being registered.
+  String? _cachedUserID;
+  String? _cachedUserName;
+
+  /// Timestamp of the last init() that completed without throwing. Reported
+  /// with call failures so we can tell "never connected" apart from "was fine
+  /// for two hours then died".
+  DateTime? _lastSuccessfulInitAt;
+
+  /// Last state seen on the connection stream, and when. Reported with call
+  /// failures; also used to avoid tearing down an in-progress reconnect.
+  ZegoSignalingPluginConnectionState? _lastConnectionState;
+  DateTime? _lastConnectionStateAt;
+
+  StreamSubscription<ZegoSignalingPluginConnectionStateChangedEvent>?
+      _connectionStateSub;
 
   /// Temporarily stores the staff ID between call-sent and call-accepted
   String? _pendingStaffId;
@@ -41,31 +101,188 @@ class ZegoCallService {
   Future<void> initialSetUp(GlobalKey<NavigatorState> navigatorKey) async {
     ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
     await ZegoUIKit().initLog();
+    // Installs the signaling plugin into ZegoPluginAdapter — must run before
+    // _listenConnectionState(), which reaches through that adapter.
     ZegoUIKitPrebuiltCallInvitationService().useSystemCallingUI(
       [ZegoUIKitSignalingPlugin()],
     );
+
+    _listenConnectionState();
+    WidgetsBinding.instance.addObserver(this);
+
     log('[ZegoCallService] Initial setup complete (before runApp)');
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // LOGIN — call AFTER successful user login
+  // CONNECTION STATE — the real source of truth for "can we call?"
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Subscribe to ZIM connection transitions for the whole app lifetime.
+  ///
+  /// This is what makes recovery possible: the moment the socket drops we
+  /// clear [_isInitialized], so the next [onUserLogin] (from a tab switch, a
+  /// resume, or [sendAudioCallToStaff]) performs a genuine re-init instead of
+  /// short-circuiting on a stale flag.
+  void _listenConnectionState() {
+    if (_connectionStateSub != null) return;
+
+    try {
+      _connectionStateSub = ZegoUIKit()
+          .getSignalingPlugin()
+          .getConnectionStateStream()
+          .listen(_onConnectionStateChanged);
+      log('[ZegoCallService] Listening to signaling connection state');
+    } catch (e, s) {
+      // getConnectionStateStream() force-unwraps the installed plugin; if the
+      // plugin ever fails to install we must not take the whole app down.
+      log('[ZegoCallService] Could not attach connection listener: $e');
+      _recordNonFatal(e, s, reason: 'zego_connection_listener_attach_failed');
+    }
+  }
+
+  void _onConnectionStateChanged(
+    ZegoSignalingPluginConnectionStateChangedEvent event,
+  ) {
+    final now = DateTime.now();
+    final previous = _lastConnectionState;
+    _lastConnectionState = event.state;
+    _lastConnectionStateAt = now;
+
+    log('[ZegoCallService] ${now.toIso8601String()} '
+        'signaling state: ${previous?.name ?? 'unknown'} → ${event.state.name} '
+        '(action: ${event.action.name}, extendedData: ${event.extendedData})');
+
+    if (event.state == ZegoSignalingPluginConnectionState.disconnected) {
+      // Allow the next login/resume to actually re-init. We deliberately do
+      // NOT re-init here: ZIM auto-reconnects on its own, and tearing the
+      // session down mid-retry would fight it. Recovery is driven by resume
+      // or by the next call attempt.
+      _isInitialized = false;
+      log('[ZegoCallService] Signaling disconnected — cleared init flag, '
+          're-init allowed on next login/resume/call');
+    }
+  }
+
+  /// Live ZIM state. Null when the plugin is not reachable yet.
+  ZegoSignalingPluginConnectionState? get _connectionState {
+    try {
+      return ZegoUIKit().getSignalingPlugin().getConnectionState();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True only when signaling is fully usable for sending an invitation.
+  bool get _isSignalingConnected =>
+      _connectionState == ZegoSignalingPluginConnectionState.connected;
+
+  /// True while ZIM is mid-handshake. Not sendable, but must not be torn down.
+  bool get _isSignalingSettling {
+    final state = _connectionState;
+    return state == ZegoSignalingPluginConnectionState.connecting ||
+        state == ZegoSignalingPluginConnectionState.reconnecting;
+  }
+
+  /// Whether the SDK itself still considers the invitation service initialized.
+  bool get _sdkReportsInit {
+    try {
+      return ZegoUIKitPrebuiltCallInvitationService().isInit;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LOGIN — call AFTER successful user login (safe to call repeatedly)
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// Registers the current user with Zego signaling (ZIM) so they can
   /// send/receive call invitations.
   ///
+  /// Safe to call on every `checkIsLogin()` — it no-ops when the session is
+  /// genuinely healthy and repairs it when it is not. It never gates on
+  /// [_isInitialized] alone; the live connection state gets the final say.
+  ///
   /// [userID] MUST be the unique backend user ID (same `_id` stored in DB).
   /// [userName] is the display name shown in call notifications.
-  void onUserLogin({
+  Future<void> onUserLogin({
     required String userID,
     required String userName,
-  }) {
-    if (_isInitialized) {
-      log('[ZegoCallService] Already initialized — skipping duplicate login');
+    bool forceReinit = false,
+  }) async {
+    if (userID.isEmpty) {
+      log('[ZegoCallService] onUserLogin called with empty userID — ignoring');
       return;
     }
 
-    ZegoUIKitPrebuiltCallInvitationService().init(
+    final isDifferentUser = _cachedUserID != null && _cachedUserID != userID;
+    _cachedUserID = userID;
+    _cachedUserName = userName;
+
+    if (_loginInFlight) {
+      log('[ZegoCallService] Login already in flight — skipping duplicate');
+      return;
+    }
+
+    // Healthy session for the same user → nothing to do. This is the common
+    // path, since checkIsLogin runs on every tab switch.
+    if (!forceReinit &&
+        !isDifferentUser &&
+        _isInitialized &&
+        _sdkReportsInit &&
+        _isSignalingConnected) {
+      log('[ZegoCallService] Already connected for $userID — skipping re-init');
+      return;
+    }
+
+    // ZIM is mid-(re)connect for the same user: let it finish rather than
+    // tearing the session down underneath it.
+    if (!forceReinit &&
+        !isDifferentUser &&
+        _isInitialized &&
+        _sdkReportsInit &&
+        _isSignalingSettling) {
+      log('[ZegoCallService] Signaling is ${_connectionState?.name} — '
+          'waiting for it to settle instead of re-initializing');
+      return;
+    }
+
+    _loginInFlight = true;
+    try {
+      log('[ZegoCallService] Initializing Zego for $userID '
+          '(forceReinit: $forceReinit, differentUser: $isDifferentUser, '
+          'sdkInit: $_sdkReportsInit, state: ${_connectionState?.name})');
+
+      // init() early-returns when the SDK already thinks it is initialized,
+      // so a stale session must be torn down first or the "recovery" would
+      // silently do nothing.
+      if (_sdkReportsInit) {
+        log('[ZegoCallService] Tearing down stale session before re-init');
+        await ZegoUIKitPrebuiltCallInvitationService().uninit();
+      }
+
+      await _initInvitationService(userID: userID, userName: userName);
+
+      _isInitialized = true;
+      _lastSuccessfulInitAt = DateTime.now();
+      log('[ZegoCallService] User logged in to Zego — userID: $userID '
+          'at ${_lastSuccessfulInitAt!.toIso8601String()}');
+    } catch (e, s) {
+      // Leave _isInitialized false so the next attempt retries rather than
+      // being locked out for the rest of the process lifetime.
+      _isInitialized = false;
+      log('[ZegoCallService] Zego init failed for $userID: $e');
+      _recordNonFatal(e, s, reason: 'zego_init_failed');
+    } finally {
+      _loginInFlight = false;
+    }
+  }
+
+  Future<void> _initInvitationService({
+    required String userID,
+    required String userName,
+  }) {
+    return ZegoUIKitPrebuiltCallInvitationService().init(
       appID: appID,
       appSign: appSign,
       userID: userID,
@@ -77,7 +294,15 @@ class ZegoCallService {
       ),
       invitationEvents: ZegoUIKitPrebuiltCallInvitationEvents(
         onError: (error) {
+          // Reported to Crashlytics too — this callback carries the real ZIM
+          // error code behind an otherwise generic call failure.
           log('[ZegoCallService] Error: ${error.code} — ${error.message}');
+          _recordNonFatal(
+            'Zego invitation error ${error.code}: ${error.message}',
+            StackTrace.current,
+            reason: 'zego_invitation_error',
+            extra: {'zego_error_code': error.code.toString()},
+          );
         },
         onOutgoingCallSent: (callID, callee, type, invitees, customData) {
           log('[ZegoCallService] Call sent → invitees: ${invitees.map((e) => e.id).toList()}');
@@ -154,9 +379,71 @@ class ZegoCallService {
         return config;
       },
     );
+  }
 
-    _isInitialized = true;
-    log('[ZegoCallService] User logged in to Zego — userID: $userID');
+  // ═══════════════════════════════════════════════════════════════════════════
+  // APP LIFECYCLE — repair the session when the user comes back
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// The OS routinely kills the ZIM socket while the app sits in the
+  /// background (doze, OEM battery managers, network handover). On resume we
+  /// re-verify and re-init if needed, so the first call attempt after coming
+  /// back is not the one that has to discover the session is dead.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    log('[ZegoCallService] Lifecycle: $state '
+        '(signaling: ${_connectionState?.name ?? 'unknown'})');
+
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_verifyConnectionOnResume());
+    }
+  }
+
+  Future<void> _verifyConnectionOnResume() async {
+    final credentials = _resolveCredentials();
+    if (credentials == null) {
+      log('[ZegoCallService] Resume: no cached user — nothing to restore');
+      return;
+    }
+
+    if (_isSignalingConnected && _sdkReportsInit) {
+      log('[ZegoCallService] Resume: signaling healthy — no action needed');
+      return;
+    }
+
+    if (_isSignalingSettling) {
+      log('[ZegoCallService] Resume: signaling ${_connectionState?.name} — '
+          'letting ZIM finish its own reconnect');
+      return;
+    }
+
+    log('[ZegoCallService] Resume: signaling '
+        '${_connectionState?.name ?? 'unknown'} → re-initializing Zego');
+    await onUserLogin(
+      userID: credentials.userID,
+      userName: credentials.userName,
+      forceReinit: true,
+    );
+  }
+
+  /// Cached credentials, falling back to the live `AuthController` session
+  /// (registered `permanent: true`, so it outlives individual routes).
+  ({String userID, String userName})? _resolveCredentials() {
+    final cachedID = _cachedUserID;
+    if (cachedID != null && cachedID.isNotEmpty) {
+      return (userID: cachedID, userName: _cachedUserName ?? 'User');
+    }
+
+    try {
+      final profile = Get.find<AuthController>().userProfile.value;
+      if (profile != null && profile.id.isNotEmpty) {
+        return (userID: profile.id, userName: profile.name);
+      }
+    } catch (_) {
+      // AuthController not registered yet (pre-login) — nothing to restore.
+    }
+    return null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -168,10 +455,16 @@ class ZegoCallService {
   /// [staffUserID] MUST be the exact same ID the staff used in their Zego init().
   /// [staffUserName] is the staff display name.
   /// [callerName] is used as notification title on the receiver side.
-  /// Returns `true` if the invitation was actually dispatched, `false` if it
-  /// failed (e.g. Zego signaling not connected — which happens when the Zego
-  /// account balance/trial is exhausted, or there is no network). On failure a
-  /// toast is shown so the user is never left tapping into a void.
+  ///
+  /// Before sending, the live signaling state is verified and repaired if
+  /// needed, so a dead-but-flagged-alive session no longer produces an
+  /// unrecoverable failure toast.
+  ///
+  /// Returns `true` if the invitation was actually dispatched, `false`
+  /// otherwise. On failure a toast is shown so the user is never left tapping
+  /// into a void, and a non-fatal is reported to Crashlytics with the real
+  /// connection state so "no network", "not logged in" and "session expired"
+  /// can be told apart from the logs.
   Future<bool> sendAudioCallToStaff({
     required String staffUserID,
     required String staffUserName,
@@ -179,10 +472,13 @@ class ZegoCallService {
   }) async {
     log('[ZegoCallService] Sending audio call → staff: $staffUserID ($staffUserName)');
 
-    // Guard: signaling session must be up before we can send anything.
-    if (!_isInitialized) {
-      log('[ZegoCallService] Cannot send — service not initialized (user not logged into Zego)');
-      _showCallFailedToast();
+    final ready = await _ensureSignalingReady();
+    if (!ready) {
+      await _handleCallFailure(
+        staffUserID: staffUserID,
+        stage: 'precheck',
+        detail: 'Signaling not ready before send',
+      );
       return false;
     }
 
@@ -193,21 +489,188 @@ class ZegoCallService {
         resourceID: _resourceID,
         notificationTitle: callerName,
         notificationMessage: 'Incoming audio call',
-        timeoutSeconds: 60,
+        timeoutSeconds: 30,
       );
 
       if (!sent) {
-        // Most common cause: Zego signaling is disconnected because the Zego
-        // project's balance/trial has run out. Nothing the app can fix at
-        // runtime — but the user must be told instead of seeing a dead button.
-        log('[ZegoCallService] send() returned false — signaling likely disconnected (check Zego balance/network)');
-        _showCallFailedToast();
+        // send() only returns false for a handful of reasons: signaling not
+        // connected, the SDK not initialized, the callee already in our
+        // "inviting" set from a previous call that never cleaned up, or ZIM
+        // rejecting the invite (unknown callee / quota / auth). The
+        // diagnostics attached below are what distinguish them.
+        await _handleCallFailure(
+          staffUserID: staffUserID,
+          stage: 'send_returned_false',
+          detail: 'ZegoUIKitPrebuiltCallInvitationService.send() returned false',
+        );
       }
       return sent;
-    } catch (e) {
-      log('[ZegoCallService] send() threw: $e');
-      _showCallFailedToast();
+    } catch (e, s) {
+      await _handleCallFailure(
+        staffUserID: staffUserID,
+        stage: 'send_threw',
+        detail: e.toString(),
+        stackTrace: s,
+      );
       return false;
+    }
+  }
+
+  /// Verify — and if necessary repair — the signaling session before sending.
+  ///
+  /// Returns true only when ZIM is `connected`. Re-inits a dead session using
+  /// the cached credentials, then polls until the socket comes up or
+  /// [_connectionWaitTimeout] elapses.
+  Future<bool> _ensureSignalingReady() async {
+    if (_isSignalingConnected && _sdkReportsInit) return true;
+
+    final credentials = _resolveCredentials();
+    if (credentials == null) {
+      log('[ZegoCallService] Cannot send — no user session available '
+          '(user never completed Zego login)');
+      return false;
+    }
+
+    // Dead session → rebuild it. Mid-handshake → skip straight to waiting.
+    if (!_isSignalingSettling) {
+      log('[ZegoCallService] Pre-send repair: signaling '
+          '${_connectionState?.name ?? 'unknown'}, sdkInit: $_sdkReportsInit '
+          '→ re-initializing');
+      await onUserLogin(
+        userID: credentials.userID,
+        userName: credentials.userName,
+        forceReinit: true,
+      );
+    }
+
+    return _waitForConnection(_connectionWaitTimeout);
+  }
+
+  Future<bool> _waitForConnection(Duration timeout) async {
+    const pollInterval = Duration(milliseconds: 250);
+    var waited = Duration.zero;
+
+    while (waited < timeout) {
+      if (_isSignalingConnected) {
+        if (waited > Duration.zero) {
+          log('[ZegoCallService] Signaling connected after ${waited.inMilliseconds}ms');
+        }
+        return true;
+      }
+      await Future.delayed(pollInterval);
+      waited += pollInterval;
+    }
+
+    log('[ZegoCallService] Timed out after ${timeout.inSeconds}s waiting for '
+        'signaling (last state: ${_connectionState?.name ?? 'unknown'})');
+    return false;
+  }
+
+  /// Single exit point for a failed call attempt: specific log line, generic
+  /// user-facing toast, and a Crashlytics non-fatal carrying the diagnosis.
+  Future<void> _handleCallFailure({
+    required String staffUserID,
+    required String stage,
+    required String detail,
+    StackTrace? stackTrace,
+  }) async {
+    final diagnostics = await _collectDiagnostics(staffUserID: staffUserID);
+    final summary = _describeFailure();
+
+    log('[ZegoCallService] CALL FAILED ($stage): $detail\n'
+        '  diagnosis: $summary\n'
+        '  ${diagnostics.entries.map((e) => '${e.key}: ${e.value}').join('\n  ')}');
+
+    _showCallFailedToast();
+
+    _recordNonFatal(
+      'Zego call failed [$stage] — $summary: $detail',
+      stackTrace ?? StackTrace.current,
+      reason: 'zego_call_send_failed',
+      extra: {'failure_stage': stage, ...diagnostics},
+    );
+  }
+
+  /// Best-effort human-readable cause, so log/Crashlytics triage does not
+  /// require re-deriving it from the raw state every time.
+  String _describeFailure() {
+    if (_resolveCredentials() == null) {
+      return 'no user session — Zego login never ran (check is-login API)';
+    }
+    switch (_connectionState) {
+      case null:
+        return 'signaling plugin unavailable — init never completed';
+      case ZegoSignalingPluginConnectionState.disconnected:
+        return _lastSuccessfulInitAt == null
+            ? 'never connected — likely network, appSign, or Zego account issue'
+            : 'signaling dropped after a good init — network switch, long '
+                'background, or kicked out by same userID elsewhere';
+      case ZegoSignalingPluginConnectionState.connecting:
+        return 'still connecting — user tapped before ZIM login finished';
+      case ZegoSignalingPluginConnectionState.reconnecting:
+        return 'reconnecting — transient network loss';
+      case ZegoSignalingPluginConnectionState.connected:
+        return 'signaling connected but send rejected — check the callee ID '
+            'matches the staff app Zego userID, or a stale invitation is '
+            'still pending for this callee';
+    }
+  }
+
+  Future<Map<String, String>> _collectDiagnostics({
+    required String staffUserID,
+  }) async {
+    final now = DateTime.now();
+    var networkType = 'unknown';
+    try {
+      // connectivity_plus is already a dependency (used by SocketService).
+      final results = await Connectivity().checkConnectivity();
+      networkType = results.map((r) => r.name).join(',');
+    } catch (_) {}
+
+    return {
+      'timestamp': now.toIso8601String(),
+      'signaling_state': _connectionState?.name ?? 'unavailable',
+      'last_state_change': _lastConnectionStateAt?.toIso8601String() ?? 'never',
+      'last_stream_state': _lastConnectionState?.name ?? 'none',
+      'sdk_is_init': _sdkReportsInit.toString(),
+      'service_flag_init': _isInitialized.toString(),
+      'last_successful_init':
+          _lastSuccessfulInitAt?.toIso8601String() ?? 'never',
+      'seconds_since_init': _lastSuccessfulInitAt == null
+          ? 'n/a'
+          : now.difference(_lastSuccessfulInitAt!).inSeconds.toString(),
+      'network_type': networkType,
+      'caller_user_id': _cachedUserID ?? 'none',
+      'callee_staff_id': staffUserID,
+      'platform':
+          '${Platform.operatingSystem} ${Platform.operatingSystemVersion}',
+    };
+  }
+
+  /// Non-fatal reporting. Crashlytics is the crash reporter wired into this
+  /// project (initialized in main.dart); it already attaches app version,
+  /// device model and OS, so we only add call-specific keys here.
+  void _recordNonFatal(
+    Object error,
+    StackTrace stackTrace, {
+    required String reason,
+    Map<String, String> extra = const {},
+  }) {
+    try {
+      final crashlytics = FirebaseCrashlytics.instance;
+      for (final entry in extra.entries) {
+        crashlytics.setCustomKey(entry.key, entry.value);
+      }
+      crashlytics.recordError(
+        error,
+        stackTrace,
+        reason: reason,
+        information: extra.entries.map((e) => '${e.key}: ${e.value}').toList(),
+        fatal: false,
+      );
+    } catch (e) {
+      // Never let telemetry break the call flow.
+      log('[ZegoCallService] Failed to record non-fatal: $e');
     }
   }
 
@@ -225,9 +688,16 @@ class ZegoCallService {
 
   /// Call on user logout to disconnect from Zego signaling.
   Future<void> onUserLogout() async {
-    if (!_isInitialized) return;
-    await ZegoUIKitPrebuiltCallInvitationService().uninit();
+    // Clear cached credentials first so a lifecycle resume racing with logout
+    // cannot resurrect the session we are tearing down.
+    _cachedUserID = null;
+    _cachedUserName = null;
     _isInitialized = false;
+    _lastSuccessfulInitAt = null;
+
+    if (!_sdkReportsInit) return;
+
+    await ZegoUIKitPrebuiltCallInvitationService().uninit();
     log('[ZegoCallService] User logged out from Zego');
   }
 

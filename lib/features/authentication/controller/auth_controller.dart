@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -267,8 +268,12 @@ class AuthController extends GetxController {
         // future block (even later in the same app run) can show the dialog.
         _blockedDialogShown = false;
 
-        // Initialize Zego call invitation service after profile is available
-        _initZegoAfterLogin();
+        // Initialize (or repair) the Zego call invitation service now that the
+        // profile is available. Deliberately not awaited — a slow ZIM login
+        // must not delay the session check that gates navigation. The service
+        // is safe to call on every checkIsLogin: it no-ops when signaling is
+        // already healthy and re-inits when the socket has died.
+        unawaited(_initZegoAfterLogin());
 
         return true;
       } else {
@@ -314,11 +319,11 @@ class AuthController extends GetxController {
 
   /// Initialize Zego signaling with the user's backend ID.
   /// Called after userProfile is successfully loaded.
-  void _initZegoAfterLogin() {
+  Future<void> _initZegoAfterLogin() async {
     final profile = userProfile.value;
     if (profile == null) return;
     log('[AuthController] Initializing Zego for user: ${profile.id} (${profile.name})');
-    ZegoCallService.instance.onUserLogin(
+    await ZegoCallService.instance.onUserLogin(
       userID: profile.id,
       userName: profile.name,
     );
