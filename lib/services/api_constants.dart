@@ -1,7 +1,9 @@
 class ApiConstants {
   // static const baseUrl = 'http://13.206.185.19/';
+  static const baseUrl = 'http://3.7.254.77/';
+
   // static const baseUrl = 'http://localhost:4000/';
-  static const String baseUrl = 'https://admin.kathoram.coresports.co.in/';
+  // static const String baseUrl = 'https://admin.kathoram.coresports.co.in/';
 
 
   // App version / maintenance
@@ -32,7 +34,9 @@ class ApiConstants {
   static const String endCall = 'api/v1/user/end-call';
 
   // Socket
-  static const String socketUrl = 'https://admin.kathoram.coresports.co.in';
+  // static const String socketUrl = 'https://admin.kathoram.coresports.co.in';
+  static const String socketUrl = 'http://3.7.254.77';
+
 
   // Payment endpoints
   static const String paymentInitiate = 'api/v1/user/payment/initiate';

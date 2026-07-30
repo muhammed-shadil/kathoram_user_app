@@ -66,9 +66,9 @@
 	     "fb" + your App ID. Until the App ID is replaced, MetaAnalytics stays
 	     disabled and no events are sent. -->
 	<key>FacebookAppID</key>
-	<string>000000000000000</string>
+	<string>1053107080989123</string>
 	<key>FacebookClientToken</key>
-	<string>REPLACE_WITH_CLIENT_TOKEN</string>
+	<string>55bfa539222b443f8c591b68d9e83826</string>
 	<key>FacebookDisplayName</key>
 	<string>Kathoram</string>
 	<key>FacebookAutoLogAppEventsEnabled</key>
@@ -80,7 +80,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>fb000000000000000</string>
+				<string>fb1053107080989123</string>
 			</array>
 		</dict>
 	</array>

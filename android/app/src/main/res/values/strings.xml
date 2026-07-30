@@ -7,6 +7,6 @@
            facebook_client_token → Settings → Advanced → Client token
          Until the App ID is replaced, MetaAnalytics stays disabled and no
          events are sent (see lib/services/meta_analytics_service.dart). -->
-    <string name="facebook_app_id">000000000000000</string>
-    <string name="facebook_client_token">REPLACE_WITH_CLIENT_TOKEN</string>
+    <string name="facebook_app_id">1053107080989123</string>
+    <string name="facebook_client_token">55bfa539222b443f8c591b68d9e83826</string>
 </resources>
