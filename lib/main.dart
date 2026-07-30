@@ -10,6 +10,7 @@ import 'package:kathoram_user_app/routes/route_pages.dart';
 import 'package:kathoram_user_app/routes/route_path.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:kathoram_user_app/services/firebase_fcm.dart';
+import 'package:kathoram_user_app/services/meta_analytics_service.dart';
 import 'package:kathoram_user_app/services/zego_call_service.dart';
 import 'package:kathoram_user_app/utils/navigator_key_utils.dart';
 import 'package:kathoram_user_app/utils/screen_security.dart';
@@ -25,13 +26,22 @@ void main() async {
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      fatal: !_isZegoIsolateCloseNoise(error, stack),
+    );
     return true;
   };
 
   await FirebaseAndNotification.initNotification();
 
   MySharedPref.init();
+
+  // Meta ads measurement. App Install and App Open are logged by the Facebook
+  // SDK itself once this runs; Registration and Login are logged explicitly
+  // from AuthController. See MetaAnalytics for the full event table.
+  await MetaAnalytics.instance.init();
 
   // Block screenshots & screen recording across the entire app (reinforces the
   // native Android FLAG_SECURE and enables the iOS secure layer + app-switcher
@@ -59,6 +69,22 @@ void main() async {
       MyApp()
       //  )
       );
+}
+
+/// `zego_uikit_prebuilt_call` (4.16.28, still broken in 4.22.2) sends the plain
+/// string `'close'` on its offline-call isolate port
+/// (`private.dart` -> `lookupIsolate.send(backgroundMessageIsolateCloseCommand)`)
+/// but the main-isolate listener `jsonDecode`s every message without the
+/// `message == 'close'` guard that its own background-isolate handler has.
+///
+/// The result is an uncaught `FormatException` whenever the app is opened from
+/// an offline call notification. It carries no call payload, so nothing is lost
+/// — but it must not be reported as a fatal crash.
+bool _isZegoIsolateCloseNoise(Object error, StackTrace stack) {
+  if (error is! FormatException) return false;
+  final frames = stack.toString();
+  return frames.contains('_registerOfflineCallIsolateNameServer') ||
+      frames.contains('ZegoCallInvitationServicePrivateImpl');
 }
 
 class MyApp extends StatelessWidget {

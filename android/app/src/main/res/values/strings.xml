@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Meta (Facebook) App Events — required for Meta ads attribution.
+         TODO: replace both values with the real ones from
+         https://developers.facebook.com/apps → your app:
+           facebook_app_id      → Settings → Basic → App ID
+           facebook_client_token → Settings → Advanced → Client token
+         Until the App ID is replaced, MetaAnalytics stays disabled and no
+         events are sent (see lib/services/meta_analytics_service.dart). -->
+    <string name="facebook_app_id">000000000000000</string>
+    <string name="facebook_client_token">REPLACE_WITH_CLIENT_TOKEN</string>
+</resources>
