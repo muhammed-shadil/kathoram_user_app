@@ -62,6 +62,23 @@ class ZegoCallService with WidgetsBindingObserver {
   /// before giving up and letting the caller show the failure toast.
   static const Duration _connectionWaitTimeout = Duration(seconds: 8);
 
+  /// Grace period before the first proactive reconnect attempt. ZIM runs its
+  /// own reconnect loop, and a hard re-init fired the instant a blip is seen
+  /// would abort a recovery that was already in progress. Two seconds is long
+  /// enough for ZIM to win on a transient drop and short enough that the user
+  /// never reaches the call button first. Set to [Duration.zero] for a truly
+  /// immediate attempt.
+  static const Duration _reconnectGrace = Duration(seconds: 2);
+
+  /// Cap on consecutive proactive reconnects. Some causes never heal at
+  /// runtime (Zego balance exhausted, appSign rejected, kicked out by the same
+  /// userID on another device); without a cap those turn into an endless
+  /// uninit/init loop that burns battery and floods Crashlytics.
+  static const int _maxReconnectAttempts = 5;
+
+  /// Longest backoff between reconnect attempts.
+  static const Duration _maxReconnectDelay = Duration(seconds: 30);
+
   /// Our own "init() completed without throwing" hint. NOT the source of
   /// truth — see the class doc. Cleared by [_onConnectionStateChanged] on
   /// disconnect so a re-init can happen.
@@ -70,6 +87,20 @@ class ZegoCallService with WidgetsBindingObserver {
   /// Guards against two concurrent init attempts (e.g. a resume and a tab
   /// switch firing at the same moment), which would race inside the SDK.
   bool _loginInFlight = false;
+
+  /// True while [onUserLogout] is tearing the session down.
+  ///
+  /// Critical for the proactive reconnect: `uninit()` makes ZIM emit
+  /// `disconnected`, and `AuthController._clearSessionAndNavigate` only nulls
+  /// `userProfile` *after* awaiting our logout — so without this flag the
+  /// reconnect would resolve the still-populated profile and silently log the
+  /// user back into Zego mid-logout.
+  bool _isLoggingOut = false;
+
+  /// Pending proactive reconnect, and how many consecutive attempts have been
+  /// made since the last time signaling was healthy.
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
 
   /// Credentials of the logged-in user, cached on [onUserLogin]. Lets the
   /// resume/recovery path re-init without depending on `AuthController` still
@@ -92,6 +123,18 @@ class ZegoCallService with WidgetsBindingObserver {
 
   /// Temporarily stores the staff ID between call-sent and call-accepted
   String? _pendingStaffId;
+
+  /// When [_pendingStaffId] was set. It is cleared by the decline/busy/
+  /// timeout/cancel callbacks — the very callbacks that can go missing when
+  /// signaling dies mid-invitation. Without an age cap a leaked pending ID
+  /// would make [_isInCall] permanently true and disable reconnect for the
+  /// rest of the process.
+  DateTime? _pendingCallStartedAt;
+
+  /// Upper bound on the ringing window (invite timeout is 30s). Past this a
+  /// pending invitation is treated as stale, not as an active call. An
+  /// *accepted* call outlives this but is covered by `HomeController.isInCall`.
+  static const Duration _pendingCallMaxAge = Duration(seconds: 90);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SETUP — call BEFORE runApp()
@@ -152,14 +195,156 @@ class ZegoCallService with WidgetsBindingObserver {
         'signaling state: ${previous?.name ?? 'unknown'} → ${event.state.name} '
         '(action: ${event.action.name}, extendedData: ${event.extendedData})');
 
+    if (event.state == ZegoSignalingPluginConnectionState.connected) {
+      // Healthy again — drop any pending retry and reset the backoff so a
+      // future drop starts from a clean slate.
+      _reconnectAttempts = 0;
+      _cancelScheduledReconnect();
+    }
+
     if (event.state == ZegoSignalingPluginConnectionState.disconnected) {
-      // Allow the next login/resume to actually re-init. We deliberately do
-      // NOT re-init here: ZIM auto-reconnects on its own, and tearing the
-      // session down mid-retry would fight it. Recovery is driven by resume
-      // or by the next call attempt.
+      // Allow the next login/resume to actually re-init...
       _isInitialized = false;
-      log('[ZegoCallService] Signaling disconnected — cleared init flag, '
-          're-init allowed on next login/resume/call');
+      log('[ZegoCallService] Signaling disconnected — cleared init flag');
+      // ...and don't wait for a natural trigger: recover on our own.
+      _scheduleReconnect();
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROACTIVE RECONNECT — self-heal without waiting for login/resume/call
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Queue a [_attemptReconnect] after a backoff delay.
+  ///
+  /// Everything that could turn recovery into a loop is filtered here:
+  /// logout teardown, our own uninit/init, an active call, a missing session,
+  /// an already-pending timer, and the attempt cap.
+  void _scheduleReconnect({Duration? overrideDelay}) {
+    if (_isLoggingOut) {
+      log('[ZegoCallService] Reconnect skipped — logging out');
+      return;
+    }
+    if (_loginInFlight) {
+      // This disconnect is almost certainly our own uninit() inside
+      // onUserLogin; that flow re-inits by itself.
+      log('[ZegoCallService] Reconnect skipped — login already in flight');
+      return;
+    }
+    if (_reconnectTimer?.isActive ?? false) {
+      log('[ZegoCallService] Reconnect already scheduled');
+      return;
+    }
+    if (_isInCall) {
+      // Re-initializing tears down the invitation service under a live call.
+      // The call's own media channel is separate from signaling, so let it
+      // finish; the next send() repairs signaling anyway.
+      log('[ZegoCallService] Reconnect deferred — call in progress');
+      return;
+    }
+    if (_resolveCredentials() == null) {
+      log('[ZegoCallService] Reconnect skipped — no user session');
+      return;
+    }
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      log('[ZegoCallService] Reconnect give-up after $_reconnectAttempts '
+          'attempts — cause is not recoverable at runtime '
+          '(Zego balance, appSign, or kicked out by another device?)');
+      _recordNonFatal(
+        'Zego signaling unrecoverable after $_reconnectAttempts reconnects',
+        StackTrace.current,
+        reason: 'zego_reconnect_exhausted',
+        extra: {
+          'signaling_state': _connectionState?.name ?? 'unavailable',
+          'last_successful_init':
+              _lastSuccessfulInitAt?.toIso8601String() ?? 'never',
+        },
+      );
+      return;
+    }
+
+    final delay = overrideDelay ?? _reconnectDelay;
+    log('[ZegoCallService] Scheduling reconnect #${_reconnectAttempts + 1} '
+        'in ${delay.inMilliseconds}ms');
+    _reconnectTimer = Timer(delay, () => unawaited(_attemptReconnect()));
+  }
+
+  /// Exponential backoff: grace, then 2×, 4×… capped at [_maxReconnectDelay].
+  Duration get _reconnectDelay {
+    if (_reconnectAttempts == 0) return _reconnectGrace;
+    final scaled = _reconnectGrace * (1 << _reconnectAttempts);
+    return scaled > _maxReconnectDelay ? _maxReconnectDelay : scaled;
+  }
+
+  void _cancelScheduledReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  /// Re-establish the Zego session using the cached user, then verify it
+  /// actually came up — scheduling another attempt if it did not.
+  Future<void> _attemptReconnect() async {
+    _reconnectTimer = null;
+
+    if (_isLoggingOut || _loginInFlight) return;
+
+    // ZIM's own reconnect may have won during the grace period.
+    if (_isSignalingConnected) {
+      log('[ZegoCallService] Reconnect unnecessary — ZIM recovered on its own');
+      _reconnectAttempts = 0;
+      return;
+    }
+    if (_isSignalingSettling) {
+      // ZIM is handling it. Re-check on a fixed, slower interval rather than
+      // the backoff: this path deliberately does not consume an attempt, so
+      // using the short grace here would poll forever on a device that stays
+      // stuck in `reconnecting` (e.g. no network at all).
+      log('[ZegoCallService] ZIM is ${_connectionState?.name} — '
+          'deferring our reconnect');
+      _scheduleReconnect(overrideDelay: _connectionWaitTimeout);
+      return;
+    }
+    if (_isInCall) {
+      log('[ZegoCallService] Reconnect deferred — call in progress');
+      return;
+    }
+
+    final credentials = _resolveCredentials();
+    if (credentials == null) return;
+
+    _reconnectAttempts++;
+    log('[ZegoCallService] Reconnect attempt $_reconnectAttempts for '
+        '${credentials.userID}');
+
+    await onUserLogin(
+      userID: credentials.userID,
+      userName: credentials.userName,
+      forceReinit: true,
+    );
+
+    final recovered = await _waitForConnection(_connectionWaitTimeout);
+    if (recovered) {
+      log('[ZegoCallService] Reconnect attempt $_reconnectAttempts succeeded');
+      _reconnectAttempts = 0;
+    } else {
+      log('[ZegoCallService] Reconnect attempt $_reconnectAttempts failed');
+      _scheduleReconnect();
+    }
+  }
+
+  /// True when a call is pending or live, so recovery does not tear down a
+  /// session the user is actively using.
+  bool get _isInCall {
+    final pendingSince = _pendingCallStartedAt;
+    if (_pendingStaffId != null &&
+        pendingSince != null &&
+        DateTime.now().difference(pendingSince) < _pendingCallMaxAge) {
+      return true;
+    }
+    try {
+      return Get.find<HomeController>().isInCall.value;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -309,6 +494,7 @@ class ZegoCallService with WidgetsBindingObserver {
           // Store staff ID for when call is accepted
           if (invitees.isNotEmpty) {
             _pendingStaffId = invitees.first.id;
+            _pendingCallStartedAt = DateTime.now();
           }
         },
         onOutgoingCallAccepted: (callID, callee) {
@@ -472,6 +658,23 @@ class ZegoCallService with WidgetsBindingObserver {
   }) async {
     log('[ZegoCallService] Sending audio call → staff: $staffUserID ($staffUserName)');
 
+    // Network-absence check first, so "the phone has no data" is never
+    // reported (to the user or to Crashlytics) as a signaling desync. Note
+    // this detects a missing *interface* — a connected-but-dead network
+    // (captive portal, no data balance) still falls through to the signaling
+    // path below, which is the correct place to catch it.
+    final connectivity = await _currentConnectivity();
+    if (connectivity.contains(ConnectivityResult.none)) {
+      await _handleCallFailure(
+        staffUserID: staffUserID,
+        stage: 'offline',
+        detail: 'Device reports no network interface',
+        connectivity: connectivity,
+        showToast: _showNoInternetToast,
+      );
+      return false;
+    }
+
     final ready = await _ensureSignalingReady();
     if (!ready) {
       await _handleCallFailure(
@@ -573,15 +776,21 @@ class ZegoCallService with WidgetsBindingObserver {
     required String stage,
     required String detail,
     StackTrace? stackTrace,
+    List<ConnectivityResult>? connectivity,
+    VoidCallback? showToast,
   }) async {
-    final diagnostics = await _collectDiagnostics(staffUserID: staffUserID);
-    final summary = _describeFailure();
+    final diagnostics = await _collectDiagnostics(
+      staffUserID: staffUserID,
+      connectivity: connectivity,
+    );
+    final summary =
+        stage == 'offline' ? 'device is offline' : _describeFailure();
 
     log('[ZegoCallService] CALL FAILED ($stage): $detail\n'
         '  diagnosis: $summary\n'
         '  ${diagnostics.entries.map((e) => '${e.key}: ${e.value}').join('\n  ')}');
 
-    _showCallFailedToast();
+    (showToast ?? _showCallFailedToast)();
 
     _recordNonFatal(
       'Zego call failed [$stage] — $summary: $detail',
@@ -616,16 +825,29 @@ class ZegoCallService with WidgetsBindingObserver {
     }
   }
 
-  Future<Map<String, String>> _collectDiagnostics({
-    required String staffUserID,
-  }) async {
-    final now = DateTime.now();
-    var networkType = 'unknown';
+  /// Current network interfaces. `[ConnectivityResult.none]` means offline;
+  /// an empty list means the query itself failed, which must NOT be treated
+  /// as offline or we would block calls on a plugin error.
+  Future<List<ConnectivityResult>> _currentConnectivity() async {
     try {
       // connectivity_plus is already a dependency (used by SocketService).
-      final results = await Connectivity().checkConnectivity();
-      networkType = results.map((r) => r.name).join(',');
-    } catch (_) {}
+      return await Connectivity().checkConnectivity();
+    } catch (e) {
+      log('[ZegoCallService] Connectivity check failed: $e');
+      return const [];
+    }
+  }
+
+  Future<Map<String, String>> _collectDiagnostics({
+    required String staffUserID,
+    List<ConnectivityResult>? connectivity,
+  }) async {
+    final now = DateTime.now();
+    // Reuse the caller's reading when it already has one (the offline path),
+    // otherwise query fresh.
+    final results = connectivity ?? await _currentConnectivity();
+    final networkType =
+        results.isEmpty ? 'unknown' : results.map((r) => r.name).join(',');
 
     return {
       'timestamp': now.toIso8601String(),
@@ -682,23 +904,46 @@ class ZegoCallService with WidgetsBindingObserver {
     );
   }
 
+  /// Shown only when the device has no network interface at all. Kept
+  /// distinct from [_showCallFailedToast] so the user gets an actionable
+  /// message, and so support can tell the two apart from a screenshot alone.
+  void _showNoInternetToast() {
+    Fluttertoast.showToast(
+      msg: 'No internet connection. Turn on Wi-Fi or mobile data and '
+          'try again.',
+      toastLength: Toast.LENGTH_LONG,
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // LOGOUT — cleanup Zego session
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// Call on user logout to disconnect from Zego signaling.
   Future<void> onUserLogout() async {
-    // Clear cached credentials first so a lifecycle resume racing with logout
-    // cannot resurrect the session we are tearing down.
+    // Order matters. uninit() below makes ZIM emit `disconnected`, which feeds
+    // the proactive-reconnect path — and AuthController only nulls its
+    // userProfile *after* awaiting this method. Without the flag (and clearing
+    // the cache first) the reconnect would resolve the still-live profile and
+    // log the user straight back into Zego.
+    _isLoggingOut = true;
+    _cancelScheduledReconnect();
+    _reconnectAttempts = 0;
     _cachedUserID = null;
     _cachedUserName = null;
     _isInitialized = false;
     _lastSuccessfulInitAt = null;
 
-    if (!_sdkReportsInit) return;
-
-    await ZegoUIKitPrebuiltCallInvitationService().uninit();
-    log('[ZegoCallService] User logged out from Zego');
+    try {
+      if (!_sdkReportsInit) return;
+      await ZegoUIKitPrebuiltCallInvitationService().uninit();
+      log('[ZegoCallService] User logged out from Zego');
+    } finally {
+      // Held briefly past uninit() so the trailing `disconnected` event, which
+      // arrives asynchronously on the stream, still sees the logout in
+      // progress and does not schedule a reconnect.
+      Timer(const Duration(seconds: 1), () => _isLoggingOut = false);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -725,11 +970,13 @@ class ZegoCallService with WidgetsBindingObserver {
   /// Clear pending state when call was not connected.
   void _clearPendingCall() {
     _pendingStaffId = null;
+    _pendingCallStartedAt = null;
   }
 
   /// Called when the actual call ends (hang up or remote end).
   void _onCallEnded() {
     _pendingStaffId = null;
+    _pendingCallStartedAt = null;
     try {
       final homeController = Get.find<HomeController>();
       homeController.endCall();
