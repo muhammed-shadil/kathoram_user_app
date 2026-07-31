@@ -57,5 +57,49 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<!-- ─── Meta (Facebook) App Events — Meta ads attribution ───
+	     From https://developers.facebook.com/apps → Kathoram:
+	       FacebookAppID       → Settings → Basic → App ID
+	       FacebookClientToken → Settings → Advanced → Client token
+	     The CFBundleURLSchemes entry below must be "fb" + the App ID, and both
+	     values must stay in sync with facebook_app_id / facebook_client_token
+	     in android/app/src/main/res/values/strings.xml. -->
+	<key>FacebookAppID</key>
+	<string>1053107080989123</string>
+	<key>FacebookClientToken</key>
+	<string>55bfa539222b443f8c591b68d9e83826</string>
+	<key>FacebookDisplayName</key>
+	<string>Kathoram</string>
+	<key>FacebookAutoLogAppEventsEnabled</key>
+	<true/>
+	<key>FacebookAdvertiserIDCollectionEnabled</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb1053107080989123</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Meta's SKAdNetwork IDs — required for install attribution on iOS 14+. -->
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>v9wttpbfk9.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>n38lu8286q.skadnetwork</string>
+		</dict>
+	</array>
+	<!-- Shown in the App Tracking Transparency prompt. The IDFA (and with it
+	     most of Meta's attribution accuracy) is only available after the user
+	     allows tracking. Requesting the prompt needs a package such as
+	     app_tracking_transparency — see the integration notes. -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This allows us to measure how well our ads work and show you more relevant ads.</string>
 </dict>
 </plist>

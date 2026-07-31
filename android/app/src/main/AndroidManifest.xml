@@ -10,13 +10,36 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14 (API 34) requires a typed FOREGROUND_SERVICE_* permission for
+         every foregroundServiceType any bundled service declares. Without them
+         startForeground() throws SecurityException and the process is killed —
+         which reads to the user as "this app has a bug" on Android 14+ only.
+         Each entry below matches a service in the merged manifest:
+           MEDIA_PROJECTION → im.zego.internal.screencapture.ZegoScreenCaptureService
+           MICROPHONE       → Zego audio capture during a call
+           PHONE_CALL       → flutter_callkit_incoming / MANAGE_OWN_CALLS calling UI
+           DATA_SYNC        → WorkManager SystemForegroundService, ZPNs push, MqttService -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Google Advertising ID — how Meta attributes an install/conversion back
+         to the ad the user saw. Required from Android 13 (API 33) onward. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
     <application
         android:label="Kathoram"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Meta (Facebook) App Events. Values live in res/values/strings.xml. -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

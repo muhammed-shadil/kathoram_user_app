@@ -10,6 +10,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../local_storage/shared_pref.dart';
 import '../../../routes/route_path.dart';
 import '../../../routes/custom_navigator.dart';
+import '../../../services/meta_analytics_service.dart';
 import '../../../services/socket_service.dart';
 import '../../../services/zego_call_service.dart';
 import '../../../theme/app_colors.dart';
@@ -98,6 +99,9 @@ class AuthController extends GetxController {
         await MySharedPref.setLoggedInStatus(true);
         await MySharedPref.setMobileNumber(loginMobileController.text.trim());
 
+        // Meta ads: Login conversion.
+        MetaAnalytics.instance.logLogin(method: 'mobile');
+
         apiCallStatus.value = ApiCallStatus.success;
         Fluttertoast.showToast(msg: response.message);
 
@@ -154,6 +158,10 @@ class AuthController extends GetxController {
         await MySharedPref.setAuthToken(guestData.accessToken);
         await MySharedPref.setLoggedInStatus(true);
         await MySharedPref.setMobileNumber(guestData.mobileNumber);
+
+        // Meta ads: guest login creates a new account, so it counts as a
+        // Registration conversion, not a Login.
+        MetaAnalytics.instance.logRegistration(method: 'guest');
 
         apiCallStatus.value = ApiCallStatus.success;
         Fluttertoast.showToast(msg: response.message);
@@ -230,6 +238,9 @@ class AuthController extends GetxController {
         await MySharedPref.setLoggedInStatus(true);
         await MySharedPref.setMobileNumber(signupData.mobileNumber);
 
+        // Meta ads: Registration conversion.
+        MetaAnalytics.instance.logRegistration(method: 'email');
+
         apiCallStatus.value = ApiCallStatus.success;
         Fluttertoast.showToast(msg: response.message);
 
@@ -267,6 +278,11 @@ class AuthController extends GetxController {
         // Validation succeeded → user is not blocked; reset the guard so a
         // future block (even later in the same app run) can show the dialog.
         _blockedDialogShown = false;
+
+        // Meta ads: attach the user to subsequent events. Email/phone are
+        // hashed on-device by the SDK and drive Advanced Matching, which
+        // recovers conversions the advertiser ID alone cannot attribute.
+        _identifyUserForMetaAds();
 
         // Initialize (or repair) the Zego call invitation service now that the
         // profile is available. Deliberately not awaited — a slow ZIM login
@@ -314,6 +330,19 @@ class AuthController extends GetxController {
         ],
       ),
       barrierDismissible: false,
+    );
+  }
+
+  /// Send the signed-in user's identity to the Facebook SDK so Meta can match
+  /// this device's events back to the person who saw the ad.
+  void _identifyUserForMetaAds() {
+    final profile = userProfile.value;
+    if (profile == null) return;
+    MetaAnalytics.instance.identifyUser(
+      userId: profile.id,
+      name: profile.name,
+      email: profile.email,
+      phone: profile.mobileNumber,
     );
   }
 
@@ -412,6 +441,16 @@ class AuthController extends GetxController {
 
         await MySharedPref.setAuthToken(loginData.accessToken);
         await MySharedPref.setLoggedInStatus(true);
+
+        // Meta ads: the same endpoint both creates and signs in accounts, and
+        // its response carries no new/existing flag. Firebase's isNewUser is
+        // the closest client-side signal — it is true only the first time this
+        // Google account authenticates against our Firebase project.
+        if (userCredential.additionalUserInfo?.isNewUser ?? false) {
+          MetaAnalytics.instance.logRegistration(method: 'Google');
+        } else {
+          MetaAnalytics.instance.logLogin(method: 'Google');
+        }
 
         Fluttertoast.showToast(msg: response.message);
         CustomNavigator.pushCompleteReplacement(RoutePath.bottomNav);
@@ -621,6 +660,10 @@ class AuthController extends GetxController {
     // Disconnect from Zego signaling before clearing session
     await ZegoCallService.instance.onUserLogout();
     await MySharedPref.clear();
+
+    // Meta ads: drop the identity so the next person to sign in on this
+    // device is not matched against the account that just logged out.
+    await MetaAnalytics.instance.clearUser();
 
     // This controller is permanent, so it survives logout — drop the profile
     // explicitly or the next user briefly sees the previous user's coins and

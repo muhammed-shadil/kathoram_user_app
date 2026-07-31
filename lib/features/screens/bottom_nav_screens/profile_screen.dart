@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../routes/route_path.dart';
 import '../../../utils/support_helper.dart';
 import '../../authentication/controller/auth_controller.dart';
+import '../../widgets/meta_ads_debug_panel.dart';
 import '../../widgets/shimmer_loaders.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -230,6 +231,11 @@ class ProfileScreen extends StatelessWidget {
                       },
                     );
                   }),
+
+                  /// Meta Ads event tester. Renders nothing in release builds
+                  /// — see MetaAdsDebugPanel. Mirrored on the sign-in screen so
+                  /// the events are reachable both before and after login.
+                  const MetaAdsDebugPanel(),
 
                   const SizedBox(height: 20),
                 ],

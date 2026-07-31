@@ -6,6 +6,7 @@ import '../../../utils/support_helper.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_outline_button.dart';
 import '../../widgets/cutom_textfield.dart';
+import '../../widgets/meta_ads_debug_panel.dart';
 import '../controller/auth_controller.dart';
 
 class SignInScreen extends StatelessWidget {
@@ -213,6 +214,10 @@ class SignInScreen extends StatelessWidget {
                                 isReversed: false,
                               ),
                       ),
+
+                      /// Meta Ads event tester. Renders nothing in release
+                      /// builds — see MetaAdsDebugPanel.
+                      const MetaAdsDebugPanel(),
 
                       const SizedBox(height: 20),
                     ],
