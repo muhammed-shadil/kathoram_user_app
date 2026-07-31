@@ -58,13 +58,12 @@
 		<string>processing</string>
 	</array>
 	<!-- ─── Meta (Facebook) App Events — Meta ads attribution ───
-	     TODO: replace FacebookAppID and FacebookClientToken with the real
-	     values from https://developers.facebook.com/apps → your app
+	     From https://developers.facebook.com/apps → Kathoram:
 	       FacebookAppID       → Settings → Basic → App ID
 	       FacebookClientToken → Settings → Advanced → Client token
-	     Also replace fb000000000000000 in CFBundleURLSchemes below with
-	     "fb" + your App ID. Until the App ID is replaced, MetaAnalytics stays
-	     disabled and no events are sent. -->
+	     The CFBundleURLSchemes entry below must be "fb" + the App ID, and both
+	     values must stay in sync with facebook_app_id / facebook_client_token
+	     in android/app/src/main/res/values/strings.xml. -->
 	<key>FacebookAppID</key>
 	<string>1053107080989123</string>
 	<key>FacebookClientToken</key>

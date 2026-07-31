@@ -156,6 +156,63 @@ class MetaAnalytics {
     }
   }
 
+  // ─── Testing / diagnostics ───
+
+  /// Sends any queued events to Meta right now.
+  ///
+  /// The SDK normally batches events and flushes on its own timer, so a freshly
+  /// logged event can take up to ~15s to leave the device. During manual
+  /// testing that delay reads as "the event never fired" — call this to remove
+  /// the ambiguity. Not needed in production; the automatic flush is fine
+  /// there and flushing per-event wastes battery and radio.
+  Future<void> flush() async {
+    if (!_ready) return;
+    try {
+      await _fb.flush();
+    } catch (e) {
+      log('[MetaAnalytics] flush failed: $e');
+    }
+  }
+
+  /// Fires a throwaway `kathoram_test_event` and flushes immediately.
+  ///
+  /// Used by the in-app debug panel to prove the whole pipe works — App ID
+  /// resolved, SDK initialised, network reachable — without having to complete
+  /// a real signup. It shows up in Events Manager as a custom event; ignore it
+  /// there, or exclude it from any custom conversion you build.
+  Future<void> logTestEvent() async {
+    if (!_ready) return;
+    try {
+      await _fb.logEvent(
+        name: 'kathoram_test_event',
+        parameters: {'source': 'debug_panel'},
+      );
+      await _fb.flush();
+      log('[MetaAnalytics] test event sent + flushed');
+    } catch (e) {
+      log('[MetaAnalytics] logTestEvent failed: $e');
+    }
+  }
+
+  /// Snapshot of the SDK state for the debug panel.
+  ///
+  /// [appId] is read back from the native SDK, so it reflects what the
+  /// manifest/plist actually resolved to — not what we hoped they contain.
+  /// [anonymousId] is the per-install device GUID Meta uses to tie events
+  /// together before a user is identified.
+  Future<Map<String, String>> debugStatus() async {
+    try {
+      return {
+        'ready': _ready.toString(),
+        'appId': await _fb.getApplicationId() ?? '(none)',
+        'anonymousId': await _fb.getAnonymousId() ?? '(none)',
+        'userId': await _fb.getUserID() ?? '(not set)',
+      };
+    } catch (e) {
+      return {'ready': 'false', 'error': e.toString()};
+    }
+  }
+
   // ─── Helpers ───
 
   static String? _orNull(String? value) {

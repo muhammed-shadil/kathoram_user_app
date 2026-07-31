@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Meta (Facebook) App Events — required for Meta ads attribution.
-         TODO: replace both values with the real ones from
-         https://developers.facebook.com/apps → your app:
-           facebook_app_id      → Settings → Basic → App ID
+         From https://developers.facebook.com/apps → Kathoram:
+           facebook_app_id       → Settings → Basic → App ID
            facebook_client_token → Settings → Advanced → Client token
-         Until the App ID is replaced, MetaAnalytics stays disabled and no
-         events are sent (see lib/services/meta_analytics_service.dart). -->
+         These must stay in sync with FacebookAppID / FacebookClientToken in
+         ios/Runner/Info.plist. MetaAnalytics reads the App ID back from the
+         SDK at startup and disables itself if it is missing or still the
+         placeholder (see lib/services/meta_analytics_service.dart). -->
     <string name="facebook_app_id">1053107080989123</string>
     <string name="facebook_client_token">55bfa539222b443f8c591b68d9e83826</string>
 </resources>
