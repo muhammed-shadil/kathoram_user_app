@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -10,19 +11,31 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- Android 14 (API 34) requires a typed FOREGROUND_SERVICE_* permission for
-         every foregroundServiceType any bundled service declares. Without them
-         startForeground() throws SecurityException and the process is killed —
-         which reads to the user as "this app has a bug" on Android 14+ only.
-         Each entry below matches a service in the merged manifest:
-           MEDIA_PROJECTION → im.zego.internal.screencapture.ZegoScreenCaptureService
-           MICROPHONE       → Zego audio capture during a call
-           PHONE_CALL       → flutter_callkit_incoming / MANAGE_OWN_CALLS calling UI
-           DATA_SYNC        → WorkManager SystemForegroundService, ZPNs push, MqttService -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- No typed FOREGROUND_SERVICE_* permission is declared, on purpose.
+         Grep the merged manifest: not one service — ours or any bundled AAR's —
+         declares android:foregroundServiceType. From targetSdk 34 a service with
+         no declared type cannot enter the foreground at all; startForeground()
+         throws MissingForegroundServiceTypeException before the permission is
+         ever consulted. So these permissions were unreachable, and removing them
+         changes nothing at runtime.
+         Calls survive backgrounding through PiP + the SYSTEM_ALERT_WINDOW
+         overlay (Zego's minimizing button), not through a foreground service.
+
+         The practical win: every typed permission here has to be justified on
+         Play Console's "Foreground service permissions" form, with a video, per
+         permission. Declaring none removes that step and the rejection risk.
+
+         MEDIA_PROJECTION additionally needs its service stripped (below) —
+         zego_express_engine ships a screen-share service, and this app has no
+         screen-sharing UI (no ZegoCallMenuBarButtonName.screenSharing anywhere).
+
+         If a real foreground service is ever added — e.g. to keep call audio
+         alive when the app is fully backgrounded rather than in PiP — it needs
+         BOTH android:foregroundServiceType on the <service> and the matching
+         permission back here, plus a fresh Play declaration. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"
+        tools:node="remove" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -68,6 +81,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Paired with the FOREGROUND_SERVICE_MEDIA_PROJECTION removal above:
+             drop the only foregroundServiceType="mediaProjection" service in the
+             merged manifest so the shipped bundle can't request the capability. -->
+        <service
+            android:name="im.zego.internal.screencapture.ZegoScreenCaptureService"
+            tools:node="remove" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

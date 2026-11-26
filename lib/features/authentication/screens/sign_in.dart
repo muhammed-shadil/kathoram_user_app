@@ -217,7 +217,7 @@ class SignInScreen extends StatelessWidget {
 
                       /// Meta Ads event tester. Renders nothing in release
                       /// builds — see MetaAdsDebugPanel.
-                      const MetaAdsDebugPanel(),
+                      // const MetaAdsDebugPanel(),
 
                       const SizedBox(height: 20),
                     ],

@@ -235,7 +235,7 @@ class ProfileScreen extends StatelessWidget {
                   /// Meta Ads event tester. Renders nothing in release builds
                   /// — see MetaAdsDebugPanel. Mirrored on the sign-in screen so
                   /// the events are reachable both before and after login.
-                  const MetaAdsDebugPanel(),
+                  // const MetaAdsDebugPanel(),
 
                   const SizedBox(height: 20),
                 ],
