@@ -74,6 +74,9 @@ class _BottomNavBarState extends State<BottomNavBar> {
         break;
       case 2: // Add Coins — plans + user balance
         home?.fetchPlans();
+        // Wallet opened: re-verify a payment left unconfirmed (e.g. the app
+        // was killed on the UPI app) so its coins show up.
+        home?.reconcilePendingPayment();
         break;
       case 3: // Profile — user data
         break;

@@ -125,6 +125,19 @@ class PaymentScreen extends StatelessWidget {
             // ── Proceed To Pay Button ──
             Obx(() {
               final isLoading = homeController.isPaymentLoading.value;
+              final progressText = homeController.paymentProgressText.value;
+              if (isLoading && progressText != null) {
+                return Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    Text(
+                      progressText,
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                  ],
+                );
+              }
               return SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -133,10 +146,16 @@ class PaymentScreen extends StatelessWidget {
                     : CustomButton(
                         text: 'Proceed To Pay',
                         onPressed: () {
+                          final route = ModalRoute.of(context);
                           homeController.initiatePayment(
                             plan.id,
                             onSuccess: () {
-                              Get.back(result: true);
+                              // Confirmation can take up to ~30s; if the user
+                              // has already left this screen, don't pop
+                              // whatever is on top now.
+                              if (route?.isCurrent ?? false) {
+                                Get.back(result: true);
+                              }
                             },
                           );
                         },

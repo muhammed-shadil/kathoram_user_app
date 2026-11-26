@@ -1,16 +1,23 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cferrorresponse/cferrorresponse.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfwebcheckoutpayment.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cftheme/cftheme.dart';
+import 'package:flutter_cashfree_pg_sdk/utils/cfenums.dart';
+import 'package:flutter_cashfree_pg_sdk/utils/cfexceptions.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../../local_storage/shared_pref.dart';
-import '../../../services/api_constants.dart';
 import '../../../services/socket_service.dart';
 import '../../../utils/enum.dart';
 import '../../authentication/controller/auth_controller.dart';
 import '../../authentication/model/user_profile_model.dart';
+import '../../widgets/phone_number_dialog.dart';
 import '../model/plan_model.dart';
 import '../model/payment_model.dart';
 import '../model/staff_model.dart';
@@ -44,13 +51,29 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   // ─── Payment ───
   var isPaymentLoading = false.obs;
+
+  /// Shown under the spinner on the payment screen (e.g. "Payment processing").
+  var paymentProgressText = RxnString();
   late Razorpay _razorpay;
-  String? _currentPlanId;
+  final CFPaymentGatewayService _cashfree = CFPaymentGatewayService();
   VoidCallback? _onPaymentSuccess;
 
-  // Razorpay key fetched from the backend (cached). Lets the key be rotated
-  // server-side without a new app build. Falls back to ApiConstants.razorpayKey.
-  String? _razorpayKey;
+  /// Order whose checkout (Cashfree or Razorpay) is currently open. Set just
+  /// before the SDK opens and cleared once its callback has been handled.
+  String? _checkoutOrderId;
+
+  /// Order currently being confirmed with /payment/verify. Stops a second
+  /// SDK callback or a lifecycle reconcile from running a parallel verify.
+  String? _confirmingOrderId;
+
+  bool _isReconciling = false;
+
+  static const Duration _verifyPollInterval = Duration(seconds: 3);
+  static const Duration _verifyPollTimeout = Duration(seconds: 30);
+  static const String _gatewayUnavailableMessage =
+      "Payments are unavailable. Please update the app.";
+  static const String _generalPaymentErrorMessage =
+      "Something went wrong with your payment. Please try again.";
 
   // ─── Active Call State ───
   var isCallLoading = false.obs;
@@ -87,14 +110,16 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
+    // Cashfree callbacks must be registered before doPayment(). The service is
+    // a singleton with static callbacks, so registering here covers every
+    // checkout this controller opens.
+    _cashfree.setCallback(_onCashfreeVerify, _onCashfreeError);
+
     // Observe app lifecycle so we can reconcile a payment whose verify callback
     // never ran because the app was killed while on a UPI app (GPay/PhonePe).
     WidgetsBinding.instance.addObserver(this);
     // Also reconcile on a fresh launch (app process was killed and relaunched).
     reconcilePendingPayment();
-
-    // Warm the Razorpay key cache so checkout opens without an extra round-trip.
-    _fetchRazorpayKey();
 
     // Get or create socket service (permanent so it survives controller re-creation)
     _socketService = Get.put(SocketService(), permanent: true);
@@ -137,37 +162,51 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   /// Reconcile a pending payment against the backend's authoritative status.
   ///
-  /// The client-side verify callback ([_handlePaymentSuccess]) only runs if the
-  /// app survives the trip to the UPI app. On low-RAM devices Android often
-  /// kills the app, so we persist the order id at checkout time and re-check it
-  /// here. The backend status is kept correct by the Razorpay webhook, so even
-  /// if the verify call never happened the coins are credited server-side and
-  /// this just refreshes the local balance.
+  /// The SDK callback only runs if the app survives the trip to the UPI app.
+  /// On low-RAM devices Android often kills the app, so the order id is saved
+  /// before checkout opens and re-verified here — on launch, on resume and
+  /// when the user opens the Add Coins (wallet) tab. /payment/verify asks the
+  /// gateway for the real status and credits the coins server-side, so this
+  /// only has to refresh the local balance.
   Future<void> reconcilePendingPayment() async {
+    // A live checkout reports through its own SDK callback. Verifying here as
+    // well would race it (e.g. resume fires when the checkout screen closes).
+    if (_checkoutOrderId != null || _confirmingOrderId != null) return;
+    // Launch, resume and the wallet tab can fire close together.
+    if (_isReconciling) return;
+
     final pendingOrderId = MySharedPref.getPendingPaymentOrderId();
     if (pendingOrderId == null || pendingOrderId.isEmpty) return;
 
+    _isReconciling = true;
     try {
-      final response =
-          await HomeRepository.paymentStatus(razorpayOrderId: pendingOrderId);
-
-      if (!response.success || response.data == null) return;
-
-      final data = response.data as Map<String, dynamic>;
-      final status = (data["status"] ?? "").toString().toLowerCase();
-
-      if (status == "paid" || status == "credited" || status == "success") {
-        // Settled successfully — stop tracking it and refresh the balance.
-        await MySharedPref.clearPendingPaymentOrderId();
-        await _refreshUserProfile();
-        Fluttertoast.showToast(msg: "Coins added to your wallet");
-      } else if (status == "failed") {
-        // Terminal failure — stop tracking it so we don't keep polling.
-        await MySharedPref.clearPendingPaymentOrderId();
+      final status = await _verifyOnce(pendingOrderId);
+      switch (status) {
+        case PaymentVerifyStatus.credited:
+          await _clearPendingOrderIfStill(pendingOrderId);
+          await _refreshUserProfile();
+          Fluttertoast.showToast(msg: "Coins added to your wallet");
+          break;
+        case PaymentVerifyStatus.failed:
+          // Terminal — stop re-checking it.
+          await _clearPendingOrderIfStill(pendingOrderId);
+          break;
+        case PaymentVerifyStatus.pending:
+        case PaymentVerifyStatus.unknown:
+        case null: // network error
+          // Keep it and check again next time.
+          break;
       }
-      // Otherwise still 'created'/pending — keep it and retry on next resume.
-    } catch (_) {
-      // Network/transient error — keep the pending id and retry next time.
+    } finally {
+      _isReconciling = false;
+    }
+  }
+
+  /// Clears the saved order id only if it is still [orderId] — a new purchase
+  /// may have replaced it while a verify was in flight.
+  Future<void> _clearPendingOrderIfStill(String orderId) async {
+    if (MySharedPref.getPendingPaymentOrderId() == orderId) {
+      await MySharedPref.clearPendingPaymentOrderId();
     }
   }
 
@@ -505,69 +544,163 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  // ─── Initiate Payment ───
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PAYMENT FLOW — initiate → gateway checkout → verify
+  //
+  // The backend chooses the gateway and is the only source of truth: an SDK
+  // "success" callback is never treated as proof of payment. Coins are added
+  // by the backend inside /payment/verify; the app only refreshes the balance.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Step 1: create an order (asking for a phone number first if the backend
+  /// needs one), then open the checkout of whichever gateway it returned.
   Future<void> initiatePayment(
     String planId, {
     VoidCallback? onSuccess,
   }) async {
+    if (isPaymentLoading.value) return;
+    isPaymentLoading.value = true;
+    paymentProgressText.value = null;
+    _onPaymentSuccess = onSuccess;
+
     try {
-      isPaymentLoading.value = true;
-      _currentPlanId = planId;
-      _onPaymentSuccess = onSuccess;
+      String? phone;
+      var response = await HomeRepository.initiatePayment(planId);
 
-      final response = await HomeRepository.initiatePayment(planId);
+      // 130 = phone number needed (Cashfree requires one; Google sign-in
+      // users have none) or the number just sent was rejected. The backend
+      // saves a valid number, so the user is only asked once.
+      while (response.responseCode == 130) {
+        final entered = await Get.dialog<String>(
+          PhoneNumberDialog(
+            errorText: phone == null ? null : response.message,
+            initialValue: phone ?? '',
+          ),
+          barrierDismissible: false,
+        );
+        if (entered == null) {
+          _endPayment();
+          return;
+        }
+        phone = entered;
+        response = await HomeRepository.initiatePayment(planId, phone: phone);
+      }
 
-      if (response.success && response.data != null) {
-        final paymentData = PaymentInitiateResponse.fromJson(
-            response.data as Map<String, dynamic>);
+      final data = response.data;
+      if (response.responseCode != 200 || data is! Map<String, dynamic>) {
+        // e.g. "Invalid Plan" (data is null).
+        _endPayment();
+        Fluttertoast.showToast(
+          msg: response.message.isNotEmpty
+              ? response.message
+              : _generalPaymentErrorMessage,
+        );
+        return;
+      }
 
-        // Persist the order id BEFORE opening checkout, so that if the app is
-        // killed while on a UPI app we can still reconcile it on relaunch.
-        await MySharedPref.setPendingPaymentOrderId(paymentData.orderId);
+      final order = PaymentInitiateResponse.fromJson(data);
+      if (order.orderId.isEmpty) {
+        _endPayment();
+        Fluttertoast.showToast(msg: _generalPaymentErrorMessage);
+        return;
+      }
 
-        await _openRazorpayCheckout(paymentData);
-      } else {
-        isPaymentLoading.value = false;
-        Fluttertoast.showToast(msg: response.message);
+      // Step 2: one case per gateway the app supports.
+      switch (order.gateway) {
+        case 'cashfree':
+          await _openCashfreeCheckout(order);
+          break;
+        case 'razorpay':
+          await _openRazorpayCheckout(order);
+          break;
+        default:
+          // Also what an old backend looks like: it ignores apiVersion and
+          // returns a raw Razorpay order with no "gateway" field.
+          log('[Payment] Unsupported gateway "${order.gateway}": $data');
+          _endPayment();
+          Fluttertoast.showToast(msg: _gatewayUnavailableMessage);
       }
     } catch (e) {
-      isPaymentLoading.value = false;
+      _endPayment();
       Fluttertoast.showToast(msg: e.toString());
     }
   }
 
-  // ─── Fetch Razorpay Key ───
-  /// Fetches the active Razorpay key from the backend and caches it. Returns
-  /// the cached key on subsequent calls, and falls back to the bundled key in
-  /// ApiConstants if the API is unavailable so checkout never breaks.
-  Future<String> _fetchRazorpayKey() async {
-    if (_razorpayKey != null && _razorpayKey!.isNotEmpty) return _razorpayKey!;
-    try {
-      final response = await HomeRepository.razorpayKey();
-      if (response.success && response.data != null) {
-        final data = response.data as Map<String, dynamic>;
-        final key = (data['razorpayKey'] ?? '').toString();
-        if (key.isNotEmpty) {
-          _razorpayKey = key;
-          return key;
-        }
-      }
-    } catch (_) {
-      // Ignore and fall back to the bundled key below.
+  // ─── Cashfree ───
+  Future<void> _openCashfreeCheckout(PaymentInitiateResponse order) async {
+    final checkout = CashfreeCheckoutData.fromJson(order.checkoutData);
+
+    // The environment always comes from the backend, never from app code.
+    final CFEnvironment? environment = switch (checkout.environment) {
+      'PRODUCTION' => CFEnvironment.PRODUCTION,
+      'SANDBOX' => CFEnvironment.SANDBOX,
+      _ => null,
+    };
+    if (environment == null || checkout.paymentSessionId.isEmpty) {
+      log('[Payment] Bad Cashfree checkoutData: ${order.checkoutData}');
+      _endPayment();
+      Fluttertoast.showToast(msg: _generalPaymentErrorMessage);
+      return;
     }
-    return ApiConstants.razorpayKey;
+
+    try {
+      final session = CFSessionBuilder()
+          .setEnvironment(environment)
+          .setOrderId(
+              checkout.orderId.isNotEmpty ? checkout.orderId : order.orderId)
+          .setPaymentSessionId(checkout.paymentSessionId)
+          .build();
+      final webCheckout = CFWebCheckoutPaymentBuilder()
+          .setSession(session)
+          .setTheme(CFThemeBuilder()
+              .setNavigationBarBackgroundColorColor('#0D6EFD')
+              .setNavigationBarTextColor('#FFFFFF')
+              .setButtonBackgroundColor('#0D6EFD')
+              .setButtonTextColor('#FFFFFF')
+              .build())
+          .build();
+
+      await _beginCheckout(order.orderId);
+      _cashfree.doPayment(webCheckout);
+    } on CFException catch (e) {
+      await _abortCheckout(order.orderId);
+      Fluttertoast.showToast(msg: e.message);
+    }
   }
 
-  // ─── Open Razorpay Checkout ───
-  Future<void> _openRazorpayCheckout(PaymentInitiateResponse paymentData) async {
-    final razorpayKey = await _fetchRazorpayKey();
-    var options = {
-      'key': razorpayKey,
-      'amount': paymentData.amount,
-      'currency': paymentData.currency,
+  void _onCashfreeVerify(String orderId) {
+    _onCheckoutClosed(callbackOrderId: orderId);
+  }
+
+  void _onCashfreeError(CFErrorResponse error, String orderId) {
+    log('[Payment] Cashfree error: ${error.getCode()} ${error.getMessage()}');
+    final code = error.getCode();
+    final message = error.getMessage() ?? 'Payment failed';
+    _onCheckoutClosed(
+      callbackOrderId: orderId,
+      // Include the code: production-only blocks (Play Store install check,
+      // app whitelisting) are identified by it.
+      sdkError: (code == null || code.isEmpty) ? message : '$message ($code)',
+    );
+  }
+
+  // ─── Razorpay (only if the backend switches back to it) ───
+  Future<void> _openRazorpayCheckout(PaymentInitiateResponse order) async {
+    final checkout = RazorpayCheckoutData.fromJson(order.checkoutData);
+    if (checkout.key.isEmpty || checkout.razorpayOrderId.isEmpty) {
+      log('[Payment] Bad Razorpay checkoutData: ${order.checkoutData}');
+      _endPayment();
+      Fluttertoast.showToast(msg: _generalPaymentErrorMessage);
+      return;
+    }
+
+    final options = {
+      'key': checkout.key,
+      'amount': checkout.amount, // paise
+      'currency': checkout.currency,
       'name': 'Kathoram',
       'description': 'Coin Purchase',
-      'order_id': paymentData.orderId,
+      'order_id': checkout.razorpayOrderId,
       'prefill': {
         'contact': userMobile,
         'email': '',
@@ -577,56 +710,164 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       },
     };
 
+    await _beginCheckout(order.orderId);
     try {
       _razorpay.open(options);
     } catch (e) {
-      isPaymentLoading.value = false;
+      await _abortCheckout(order.orderId);
       Fluttertoast.showToast(msg: "Error opening payment gateway");
     }
   }
 
-  // ─── Razorpay Callbacks ───
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    try {
-      final verifyResponse = await HomeRepository.verifyPayment(
-        razorpayOrderId: response.orderId ?? "",
-        razorpayPaymentId: response.paymentId ?? "",
-        razorpaySignature: response.signature ?? "",
-      );
-
-      if (verifyResponse.success) {
-        // Fast path succeeded — reconciliation no longer needs to handle it.
-        await MySharedPref.clearPendingPaymentOrderId();
-        Fluttertoast.showToast(msg: "Payment successful!");
-
-        // Refresh user profile to update coins BEFORE calling success callback
-        try {
-          final authController = Get.find<AuthController>();
-          await authController.checkIsLogin();
-        } catch (_) {}
-
-        // Now call success callback after profile is refreshed
-        _onPaymentSuccess?.call();
-      } else {
-        Fluttertoast.showToast(
-            msg: verifyResponse.message);
-      }
-    } catch (e) {
-      Fluttertoast.showToast(msg: "Payment verification failed");
-    } finally {
-      isPaymentLoading.value = false;
-    }
+  // The Razorpay ids and signature in these responses are deliberately not
+  // used: the backend checks the order with Razorpay itself in /payment/verify.
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    _onCheckoutClosed();
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    isPaymentLoading.value = false;
-    Fluttertoast.showToast(
-        msg: "Payment failed: ${response.message ?? 'Unknown error'}");
+    _onCheckoutClosed(sdkError: response.message ?? 'Payment failed');
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
-    isPaymentLoading.value = false;
+    // The payment continues outside Razorpay. The saved order id stays, so it
+    // is re-verified on the next resume / wallet visit.
+    _endPayment();
     Fluttertoast.showToast(
         msg: "External wallet selected: ${response.walletName}");
+  }
+
+  // ─── Shared checkout plumbing ───
+
+  /// Saves the order id BEFORE the checkout opens, so a payment completed
+  /// while the app was killed (e.g. on a UPI app) can be verified on relaunch.
+  Future<void> _beginCheckout(String orderId) async {
+    await MySharedPref.setPendingPaymentOrderId(orderId);
+    _checkoutOrderId = orderId;
+  }
+
+  /// The checkout never opened, so nothing can have been paid on this order.
+  Future<void> _abortCheckout(String orderId) async {
+    await _clearPendingOrderIfStill(orderId);
+    _endPayment();
+  }
+
+  void _endPayment() {
+    _checkoutOrderId = null;
+    paymentProgressText.value = null;
+    isPaymentLoading.value = false;
+  }
+
+  /// Called from every SDK callback (success AND error): a payment can succeed
+  /// even when the SDK reports an error or the user backs out, so the backend
+  /// is always asked.
+  void _onCheckoutClosed({String? callbackOrderId, String? sdkError}) {
+    // Prefer the order we opened: the SDK's error path can report the
+    // placeholder "order_id_not_found" instead of a real id.
+    final fromCallback = (callbackOrderId == null ||
+            callbackOrderId.isEmpty ||
+            callbackOrderId == 'order_id_not_found')
+        ? null
+        : callbackOrderId;
+    final orderId = _checkoutOrderId ??
+        fromCallback ??
+        MySharedPref.getPendingPaymentOrderId();
+    _checkoutOrderId = null;
+
+    if (orderId == null || orderId.isEmpty) {
+      log('[Payment] Checkout closed with no known order id');
+      _endPayment();
+      return;
+    }
+    _confirmPayment(orderId, sdkError: sdkError);
+  }
+
+  /// Step 3: POST /payment/verify, polling while the backend says "pending".
+  ///
+  /// [sdkError] is the gateway SDK's own message when checkout closed through
+  /// its error callback. It is shown to the user whenever the backend can't
+  /// confirm a payment, so the real cause (e.g. Cashfree production's
+  /// "installer_package_not_approved") isn't hidden behind a generic message.
+  Future<void> _confirmPayment(
+    String orderId, {
+    String? sdkError,
+  }) async {
+    if (_confirmingOrderId == orderId) return;
+    _confirmingOrderId = orderId;
+    isPaymentLoading.value = true;
+
+    try {
+      var status = await _verifyOnce(orderId);
+
+      if (status == PaymentVerifyStatus.pending) {
+        paymentProgressText.value = "Payment processing";
+        Fluttertoast.showToast(msg: "Payment processing");
+        final deadline = DateTime.now().add(_verifyPollTimeout);
+        while (status == PaymentVerifyStatus.pending &&
+            DateTime.now().isBefore(deadline)) {
+          await Future.delayed(_verifyPollInterval);
+          // A transient network error mid-poll just means "ask again".
+          status = await _verifyOnce(orderId) ?? PaymentVerifyStatus.pending;
+        }
+      }
+
+      switch (status) {
+        case PaymentVerifyStatus.credited:
+          await _clearPendingOrderIfStill(orderId);
+          Fluttertoast.showToast(msg: "Payment successful!");
+          // Refresh the coin balance BEFORE the success callback, as before.
+          await _refreshUserProfile();
+          _onPaymentSuccess?.call();
+          break;
+        case PaymentVerifyStatus.pending:
+          // Keep the saved order id: it is re-verified on the next launch,
+          // resume or wallet visit.
+          Fluttertoast.showToast(
+            msg: sdkError != null
+                ? "Payment not completed: $sdkError\nIf you did pay, your coins will be added automatically in a few minutes."
+                : "Your payment is still processing. Your coins will be added automatically in a few minutes.",
+            toastLength: Toast.LENGTH_LONG,
+          );
+          break;
+        case PaymentVerifyStatus.failed:
+          await _clearPendingOrderIfStill(orderId);
+          Fluttertoast.showToast(
+            msg: "Payment failed. No coins were added. Please try again.",
+            toastLength: Toast.LENGTH_LONG,
+          );
+          break;
+        case PaymentVerifyStatus.unknown:
+          Fluttertoast.showToast(
+            msg: sdkError != null
+                ? "Payment not completed: $sdkError"
+                : _generalPaymentErrorMessage,
+            toastLength: Toast.LENGTH_LONG,
+          );
+          break;
+        case null:
+          Fluttertoast.showToast(
+            msg: "Couldn't confirm your payment right now. We'll check again automatically.",
+            toastLength: Toast.LENGTH_LONG,
+          );
+          break;
+      }
+    } finally {
+      _confirmingOrderId = null;
+      _onPaymentSuccess = null;
+      _endPayment();
+    }
+  }
+
+  /// One POST /payment/verify. Returns null on a network/transport error.
+  Future<PaymentVerifyStatus?> _verifyOnce(String orderId) async {
+    try {
+      final response = await HomeRepository.verifyPayment(orderId: orderId);
+      final status = parsePaymentVerifyStatus(response.data);
+      log('[Payment] verify $orderId → $status (${response.message})');
+      return status;
+    } catch (e) {
+      log('[Payment] verify $orderId failed: $e');
+      return null;
+    }
   }
 }

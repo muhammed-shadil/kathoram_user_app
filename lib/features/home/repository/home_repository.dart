@@ -108,13 +108,23 @@ class HomeRepository {
   }
 
   /// Initiate Payment API call - POST
-  static Future<ApiBaseModel> initiatePayment(String planId) async {
+  ///
+  /// `apiVersion: 2` selects the gateway-agnostic flow; without it the
+  /// backend falls back to the legacy Razorpay flow kept for old builds.
+  /// [phone] is sent only after the backend asked for it (responseCode 130,
+  /// reason PHONE_REQUIRED).
+  static Future<ApiBaseModel> initiatePayment(
+    String planId, {
+    String? phone,
+  }) async {
     late ApiBaseModel response;
     await BaseClient.shared.safeApiCall(
       ApiConstants.paymentInitiate,
       RequestType.post,
       data: {
         "planId": planId,
+        "apiVersion": 2,
+        if (phone != null) "phone": phone,
       },
       onSuccess: (s) {
         response = s;
@@ -134,76 +144,17 @@ class HomeRepository {
   }
 
   /// Verify Payment API call - POST
-  static Future<ApiBaseModel> verifyPayment({
-    required String razorpayOrderId,
-    required String razorpayPaymentId,
-    required String razorpaySignature,
-  }) async {
+  ///
+  /// The backend asks the gateway for the real status and credits the coins
+  /// itself (idempotently), so this is safe to call repeatedly for the same
+  /// order. `data.status` is one of credited / pending / failed / unknown.
+  static Future<ApiBaseModel> verifyPayment({required String orderId}) async {
     late ApiBaseModel response;
     await BaseClient.shared.safeApiCall(
       ApiConstants.paymentVerify,
       RequestType.post,
       data: {
-        "razorpay_order_id": razorpayOrderId,
-        "razorpay_payment_id": razorpayPaymentId,
-        "razorpay_signature": razorpaySignature,
-      },
-      onSuccess: (s) {
-        response = s;
-      },
-      onError: (s) {
-        s.fold(
-          (l) {
-            throw l.message;
-          },
-          (l) {
-            throw l;
-          },
-        );
-      },
-    );
-    return response;
-  }
-
-  /// Razorpay Key API call - GET
-  /// Fetches the active Razorpay key (test/live) from the backend so the key
-  /// can be rotated server-side without shipping a new app build.
-  static Future<ApiBaseModel> razorpayKey() async {
-    late ApiBaseModel response;
-    await BaseClient.shared.safeApiCall(
-      ApiConstants.razorpayKeyApi,
-      RequestType.get,
-      onSuccess: (s) {
-        response = s;
-      },
-      onError: (s) {
-        s.fold(
-          (l) {
-            throw l.message;
-          },
-          (l) {
-            throw l;
-          },
-        );
-      },
-    );
-    return response;
-  }
-
-  /// Payment Status API call - POST
-  /// Used to reconcile a payment whose client-side verify callback never ran
-  /// (e.g. the app was killed while switching to a UPI app like GPay/PhonePe).
-  /// The backend returns the authoritative status from its own DB, which is
-  /// kept up to date by the Razorpay webhook.
-  static Future<ApiBaseModel> paymentStatus({
-    required String razorpayOrderId,
-  }) async {
-    late ApiBaseModel response;
-    await BaseClient.shared.safeApiCall(
-      ApiConstants.paymentStatus,
-      RequestType.post,
-      data: {
-        "razorpay_order_id": razorpayOrderId,
+        "orderId": orderId,
       },
       onSuccess: (s) {
         response = s;

@@ -106,8 +106,8 @@ class MySharedPref {
   static bool getOnboardingShown() =>
       _sharedPreferences.getBool(_onboardingShown) ?? false;
 
-  /// save the order id of an in-progress Razorpay payment so it can be
-  /// reconciled if the app is killed (e.g. when switching to a UPI app)
+  /// save the order id of an in-progress payment (any gateway) so it can be
+  /// verified if the app is killed (e.g. when switching to a UPI app)
   static Future<void> setPendingPaymentOrderId(String orderId) =>
       _sharedPreferences.setString(_pendingPaymentOrderId, orderId);
 

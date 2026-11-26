@@ -4,6 +4,9 @@ class ApiConstants {
 
   // static const baseUrl = 'http://localhost:4000/';
   static const String baseUrl = 'https://admin.kathoram.coresports.co.in/';
+  // TEMP: Cashfree sandbox testing backend. Switch back to the line above
+  // before a production build.
+  // static const String baseUrl = 'https://carmaker-mulled-hardly.ngrok-free.dev/';
 
 
   // App version / maintenance
@@ -38,15 +41,10 @@ class ApiConstants {
   // static const String socketUrl = 'http://3.7.254.77';
 
 
-  // Payment endpoints
+  // Payment endpoints (gateway-agnostic, apiVersion 2). No gateway keys live
+  // in the app: everything checkout needs comes back from /payment/initiate.
   static const String paymentInitiate = 'api/v1/user/payment/initiate';
   static const String paymentVerify = 'api/v1/user/payment/verify';
-  static const String paymentStatus = 'api/v1/user/payment/status';
-  static const String razorpayKeyApi = 'api/v1/user/payment/razorpay-key';
-
-  // Razorpay (fallback key, used only if the razorpay-key API fails)
-  // static const String razorpayKey = 'rzp_test_SzAMW5gZm2Ey2U';
-  static const String razorpayKey = 'rzp_live_SzAJyWdADtr20m';
 
   static String refreshToken = "";
 }

@@ -101,5 +101,25 @@
 	     app_tracking_transparency — see the integration notes. -->
 	<key>NSUserTrackingUsageDescription</key>
 	<string>This allows us to measure how well our ads work and show you more relevant ads.</string>
+	<!-- Cashfree PG: lets checkout detect and open UPI apps.
+	     List from Cashfree's Flutter SDK guide (Info.plist section). -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>amazonpay</string>
+		<string>upi</string>
+		<string>credpay</string>
+		<string>bhim</string>
+		<string>paytmmp</string>
+		<string>phonepe</string>
+		<string>tez</string>
+		<string>navipay</string>
+		<string>mobikwik</string>
+		<string>myairtel</string>
+		<string>popclubapp</string>
+		<string>super</string>
+		<string>kiwi</string>
+		<string>simplypayupi</string>
+		<string>whatsapp</string>
+	</array>
 </dict>
 </plist>
